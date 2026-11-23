@@ -4,6 +4,7 @@ import type {
   CalibrationProfile,
   CommunicationHistoryEntry,
   Language,
+  PatientAccountSummary,
   PatientProfile,
   PhraseCategory,
   PhraseItem,
@@ -11,7 +12,7 @@ import type {
 import {
   appendCommunicationHistory,
   clearAllCommunicationHistory,
-  clearAllLocalData,
+  clearPatientStorageKeys,
   DEFAULT_PROFILE,
   DEFAULT_SETTINGS,
   deleteCommunicationHistoryEntry,
@@ -32,9 +33,25 @@ import {
   savePatientProfile,
   saveSettings,
 } from '../features/storage/local-storage';
+import {
+  ACTIVE_PATIENT_CHANGED_EVENT,
+  createPatientAccount,
+  getActivePatientId,
+  listPatientAccounts,
+  removePatientAccountFromDirectory,
+  setActivePatientId,
+  updatePatientAccountDisplayName,
+} from '../features/storage/patient-accounts';
+import { eraseLifeHubState } from '../features/storage/life-hub-storage';
+import { deleteAllImagesForPatient } from '../features/storage/indexeddb-media';
 import { DEFAULT_CATEGORIES, DEFAULT_PHRASES } from '../features/communication/phrase-library';
 
 interface AppStateContextValue {
+  activePatientId: string;
+  patientAccounts: PatientAccountSummary[];
+  switchPatient: (patientId: string) => void;
+  createNewPatient: (displayName: string) => PatientAccountSummary;
+  deleteActivePatientAccount: () => Promise<void>;
   settings: AppSettings;
   updateSettings: (updater: (prev: AppSettings) => AppSettings) => void;
   setLanguage: (lang: Language) => void;
@@ -63,15 +80,50 @@ interface AppStateContextValue {
 const AppStateContext = createContext<AppStateContextValue | null>(null);
 
 export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
-  const [calibration, setCalibration] = useState<CalibrationProfile | null>(() => loadCalibration());
-  const [profile, setProfile] = useState<PatientProfile>(() => loadPatientProfile());
-  const [categories, setCategories] = useState<PhraseCategory[]>(() => loadCategories());
-  const [phrases, setPhrases] = useState<PhraseItem[]>(() => loadPhrases());
-  const [recentPhrases, setRecentPhrases] = useState<string[]>(() => loadRecentPhrases());
-  const [history, setHistory] = useState<CommunicationHistoryEntry[]>(() =>
-    loadCommunicationHistory()
+  const [activePatientId, setActivePatientIdState] = useState<string>(() => getActivePatientId());
+  const [patientAccounts, setPatientAccounts] = useState<PatientAccountSummary[]>(() =>
+    listPatientAccounts()
   );
+
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings(activePatientId));
+  const [calibration, setCalibration] = useState<CalibrationProfile | null>(() =>
+    loadCalibration(activePatientId)
+  );
+  const [profile, setProfile] = useState<PatientProfile>(() =>
+    loadPatientProfile(activePatientId)
+  );
+  const [categories, setCategories] = useState<PhraseCategory[]>(() =>
+    loadCategories(activePatientId)
+  );
+  const [phrases, setPhrases] = useState<PhraseItem[]>(() => loadPhrases(activePatientId));
+  const [recentPhrases, setRecentPhrases] = useState<string[]>(() =>
+    loadRecentPhrases(activePatientId)
+  );
+  const [history, setHistory] = useState<CommunicationHistoryEntry[]>(() =>
+    loadCommunicationHistory(activePatientId)
+  );
+
+  const reloadForPatient = useCallback((patientId: string) => {
+    setActivePatientIdState(patientId);
+    setPatientAccounts(listPatientAccounts());
+    setSettings(loadSettings(patientId));
+    setCalibration(loadCalibration(patientId));
+    setProfile(loadPatientProfile(patientId));
+    setCategories(loadCategories(patientId));
+    setPhrases(loadPhrases(patientId));
+    setRecentPhrases(loadRecentPhrases(patientId));
+    setHistory(loadCommunicationHistory(patientId));
+  }, []);
+
+  useEffect(() => {
+    const onPatientChanged = (e: Event) => {
+      const custom = e as CustomEvent<{ patientId?: string }>;
+      const nextId = custom.detail?.patientId || getActivePatientId();
+      reloadForPatient(nextId);
+    };
+    window.addEventListener(ACTIVE_PATIENT_CHANGED_EVENT, onPatientChanged);
+    return () => window.removeEventListener(ACTIVE_PATIENT_CHANGED_EVENT, onPatientChanged);
+  }, [reloadForPatient]);
 
   // Sync theme and high-contrast classes onto document.documentElement
   useEffect(() => {
@@ -88,13 +140,51 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [settings.interface.theme, settings.interface.highContrast]);
 
-  const updateSettings = useCallback((updater: (prev: AppSettings) => AppSettings) => {
-    setSettings((prev) => {
-      const next = updater(prev);
-      saveSettings(next);
-      return next;
-    });
-  }, []);
+  const switchPatient = useCallback(
+    (patientId: string) => {
+      setActivePatientId(patientId);
+      reloadForPatient(patientId);
+    },
+    [reloadForPatient]
+  );
+
+  const createNewPatient = useCallback(
+    (displayName: string): PatientAccountSummary => {
+      const created = createPatientAccount(displayName);
+      savePatientProfile(
+        {
+          ...DEFAULT_PROFILE,
+          name: created.displayName,
+          preferredName: created.displayName.split(' ')[0] || created.displayName,
+          onboardingCompleted: true,
+        },
+        created.id
+      );
+      reloadForPatient(created.id);
+      return created;
+    },
+    [reloadForPatient]
+  );
+
+  const deleteActivePatientAccount = useCallback(async () => {
+    const doomedId = activePatientId;
+    clearPatientStorageKeys(doomedId);
+    eraseLifeHubState(doomedId);
+    await deleteAllImagesForPatient(doomedId);
+    const nextId = removePatientAccountFromDirectory(doomedId);
+    reloadForPatient(nextId);
+  }, [activePatientId, reloadForPatient]);
+
+  const updateSettings = useCallback(
+    (updater: (prev: AppSettings) => AppSettings) => {
+      setSettings((prev) => {
+        const next = updater(prev);
+        saveSettings(next, activePatientId);
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
   const setLanguage = useCallback(
     (lang: Language) => {
@@ -106,102 +196,136 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [updateSettings]
   );
 
-  const setCalibrationProfile = useCallback((cal: CalibrationProfile) => {
-    setCalibration(cal);
-    saveCalibration(cal);
-  }, []);
+  const setCalibrationProfile = useCallback(
+    (cal: CalibrationProfile) => {
+      setCalibration(cal);
+      saveCalibration(cal, activePatientId);
+    },
+    [activePatientId]
+  );
 
   const clearCalibrationProfile = useCallback(() => {
     setCalibration(null);
-    eraseCalibration();
-  }, []);
+    eraseCalibration(activePatientId);
+  }, [activePatientId]);
 
-  const updateProfile = useCallback((updater: (prev: PatientProfile) => PatientProfile) => {
-    setProfile((prev) => {
-      const next = updater(prev);
-      savePatientProfile(next);
-      return next;
-    });
-  }, []);
+  const updateProfile = useCallback(
+    (updater: (prev: PatientProfile) => PatientProfile) => {
+      setProfile((prev) => {
+        const next = updater(prev);
+        savePatientProfile(next, activePatientId);
+        if (next.name?.trim()) {
+          updatePatientAccountDisplayName(activePatientId, next.name);
+          setPatientAccounts(listPatientAccounts());
+        }
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
-  const addCategory = useCallback((nameEn: string, nameHi: string) => {
-    const newCat: PhraseCategory = {
-      id: `cat_${Date.now()}`,
-      nameEn: nameEn.trim(),
-      nameHi: nameHi.trim() || nameEn.trim(),
-      isCustom: true,
-    };
-    setCategories((prev) => {
-      const next = [...prev, newCat];
-      saveCustomCategories(next);
-      return next;
-    });
-  }, []);
+  const addCategory = useCallback(
+    (nameEn: string, nameHi: string) => {
+      const newCat: PhraseCategory = {
+        id: `cat_${Date.now()}`,
+        nameEn: nameEn.trim(),
+        nameHi: nameHi.trim() || nameEn.trim(),
+        isCustom: true,
+      };
+      setCategories((prev) => {
+        const next = [...prev, newCat];
+        saveCustomCategories(next, activePatientId);
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
-  const deleteCategory = useCallback((id: string) => {
-    setCategories((prev) => {
-      const next = prev.filter((c) => c.id !== id || !c.isCustom);
-      saveCustomCategories(next);
-      return next;
-    });
-  }, []);
+  const deleteCategory = useCallback(
+    (id: string) => {
+      setCategories((prev) => {
+        const next = prev.filter((c) => c.id !== id || !c.isCustom);
+        saveCustomCategories(next, activePatientId);
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
-  const addCustomPhrase = useCallback((categoryId: string, textEn: string, textHi: string) => {
-    const item: PhraseItem = {
-      id: `phr_${Date.now()}`,
-      categoryId,
-      textEn: textEn.trim(),
-      textHi: textHi.trim() || textEn.trim(),
-      isCustom: true,
-      isFavorite: false,
-    };
-    setPhrases((prev) => {
-      const next = [...prev, item];
-      saveCustomPhrases(next);
-      return next;
-    });
-  }, []);
+  const addCustomPhrase = useCallback(
+    (categoryId: string, textEn: string, textHi: string) => {
+      const item: PhraseItem = {
+        id: `phr_${Date.now()}`,
+        categoryId,
+        textEn: textEn.trim(),
+        textHi: textHi.trim() || textEn.trim(),
+        isCustom: true,
+        isFavorite: false,
+      };
+      setPhrases((prev) => {
+        const next = [...prev, item];
+        saveCustomPhrases(next, activePatientId);
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
-  const updatePhrase = useCallback((id: string, textEn: string, textHi: string) => {
-    setPhrases((prev) => {
-      const next = prev.map((p) =>
-        p.id === id
-          ? {
-              ...p,
-              textEn: textEn.trim(),
-              textHi: textHi.trim() || textEn.trim(),
-              isCustom: p.isCustom ?? true,
-            }
-          : p
-      );
-      saveCustomPhrases(next.filter((p) => p.isCustom));
-      return next;
-    });
-  }, []);
+  const updatePhrase = useCallback(
+    (id: string, textEn: string, textHi: string) => {
+      setPhrases((prev) => {
+        const next = prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                textEn: textEn.trim(),
+                textHi: textHi.trim() || textEn.trim(),
+                isCustom: p.isCustom ?? true,
+              }
+            : p
+        );
+        saveCustomPhrases(
+          next.filter((p) => p.isCustom),
+          activePatientId
+        );
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
-  const deletePhrase = useCallback((id: string) => {
-    setPhrases((prev) => {
-      const next = prev.filter((p) => p.id !== id || !p.isCustom);
-      saveCustomPhrases(next);
-      return next;
-    });
-  }, []);
+  const deletePhrase = useCallback(
+    (id: string) => {
+      setPhrases((prev) => {
+        const next = prev.filter((p) => p.id !== id || !p.isCustom);
+        saveCustomPhrases(next, activePatientId);
+        return next;
+      });
+    },
+    [activePatientId]
+  );
 
-  const toggleFavoritePhrase = useCallback((id: string) => {
-    const favIds = new Set(loadFavoriteIds());
-    if (favIds.has(id)) {
-      favIds.delete(id);
-    } else {
-      favIds.add(id);
-    }
-    saveFavoriteIds(Array.from(favIds));
-    setPhrases((prev) => prev.map((p) => ({ ...p, isFavorite: favIds.has(p.id) })));
-  }, []);
+  const toggleFavoritePhrase = useCallback(
+    (id: string) => {
+      const favIds = new Set(loadFavoriteIds(activePatientId));
+      if (favIds.has(id)) {
+        favIds.delete(id);
+      } else {
+        favIds.add(id);
+      }
+      saveFavoriteIds(Array.from(favIds), activePatientId);
+      setPhrases((prev) => prev.map((p) => ({ ...p, isFavorite: favIds.has(p.id) })));
+    },
+    [activePatientId]
+  );
 
-  const recordRecentPhrase = useCallback((text: string) => {
-    const next = pushRecentPhrase(text);
-    setRecentPhrases(next);
-  }, []);
+  const recordRecentPhrase = useCallback(
+    (text: string) => {
+      const next = pushRecentPhrase(text, activePatientId);
+      setRecentPhrases(next);
+    },
+    [activePatientId]
+  );
 
   const recordCommunication = useCallback(
     (text: string, spoken: boolean) => {
@@ -216,24 +340,34 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         timestamp: new Date().toISOString(),
         spoken,
       };
-      const next = appendCommunicationHistory(entry, true);
+      const next = appendCommunicationHistory(entry, true, activePatientId);
       setHistory(next);
     },
-    [recordRecentPhrase, settings.communication.language, settings.privacy.historyConsentEnabled]
+    [
+      activePatientId,
+      recordRecentPhrase,
+      settings.communication.language,
+      settings.privacy.historyConsentEnabled,
+    ]
   );
 
-  const deleteHistoryEntry = useCallback((id: string) => {
-    const next = deleteCommunicationHistoryEntry(id);
-    setHistory(next);
-  }, []);
+  const deleteHistoryEntry = useCallback(
+    (id: string) => {
+      const next = deleteCommunicationHistoryEntry(id, activePatientId);
+      setHistory(next);
+    },
+    [activePatientId]
+  );
 
   const clearHistory = useCallback(() => {
-    clearAllCommunicationHistory();
+    clearAllCommunicationHistory(activePatientId);
     setHistory([]);
-  }, []);
+  }, [activePatientId]);
 
   const resetAllAppData = useCallback(() => {
-    clearAllLocalData();
+    clearPatientStorageKeys(activePatientId);
+    eraseLifeHubState(activePatientId);
+    void deleteAllImagesForPatient(activePatientId);
     setSettings(DEFAULT_SETTINGS);
     setCalibration(null);
     setProfile(DEFAULT_PROFILE);
@@ -241,11 +375,16 @@ export const AppStateProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setPhrases(DEFAULT_PHRASES);
     setRecentPhrases([]);
     setHistory([]);
-  }, []);
+  }, [activePatientId]);
 
   return (
     <AppStateContext.Provider
       value={{
+        activePatientId,
+        patientAccounts,
+        switchPatient,
+        createNewPatient,
+        deleteActivePatientAccount,
         settings,
         updateSettings,
         setLanguage,

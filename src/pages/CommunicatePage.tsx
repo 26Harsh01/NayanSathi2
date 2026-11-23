@@ -18,6 +18,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Shield,
   Smile,
   Sparkles,
   Square,
@@ -70,13 +71,14 @@ import {
   type SpeechStatus,
 } from '../features/communication/text-to-speech';
 import { getCommunicationSuggestions } from '../features/ai/suggestion-engine';
+import { MY_VOICE_MY_RULES_PHRASES } from '../features/communication/personal-autonomy';
 import type { AISuggestion, CommunicationContextId, PhraseItem } from '../types';
 
 interface CommunicatePageProps {
   onNavigate?: (route: AppRoute) => void;
 }
 
-type BoardViewMode = 'phrases' | 'keyboard' | 'contexts';
+type BoardViewMode = 'phrases' | 'keyboard' | 'contexts' | 'autonomy';
 
 const CATEGORY_VISUALS: Record<
   string,
@@ -409,6 +411,18 @@ export const CommunicatePage: React.FC<CommunicatePageProps> = ({ onNavigate }) 
                   {lang === 'hi' ? activeContextDef.labelHi : activeContextDef.labelEn}
                 </span>
               </GazeButton>
+
+              <GazeButton
+                gazeId="mode_autonomy"
+                gazeLabel="My Voice, My Rules"
+                variant={boardView === 'autonomy' ? 'selected' : 'default'}
+                sizeOverride="standard"
+                onClick={() => setBoardView('autonomy')}
+                className="whitespace-nowrap"
+              >
+                <Shield className="w-4 h-4" />
+                <span>{lang === 'hi' ? 'मेरी आवाज़, मेरे नियम' : 'My Voice, My Rules'}</span>
+              </GazeButton>
             </div>
 
             <GazeButton
@@ -652,8 +666,8 @@ export const CommunicatePage: React.FC<CommunicatePageProps> = ({ onNavigate }) 
                 <div className="p-8 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-center text-sm text-slate-600 dark:text-slate-300">
                   {activeCategoryId === 'favorites'
                     ? lang === 'hi'
-                      ? 'अभी तक कोई पसंदीदा वाक्यांश नहीं है। रोगी केंद्र या वाक्य निर्माता से वाक्यांश सहेजें।'
-                      : 'No favorite phrases yet. Star phrases in the Patient Hub or save sentences above.'
+                      ? 'अभी तक कोई पसंदीदा वाक्यांश नहीं है। जीवन केंद्र या वाक्य निर्माता से वाक्यांश सहेजें।'
+                      : 'No favorite phrases yet. Star phrases in Life Hub → Gaze Diagnostics or save sentences above.'
                     : lang === 'hi'
                       ? 'इस श्रेणी में अभी तक कोई वाक्यांश नहीं है।'
                       : 'No phrases in this category yet.'}
@@ -856,6 +870,44 @@ export const CommunicatePage: React.FC<CommunicatePageProps> = ({ onNavigate }) 
                   })}
                 </div>
               )}
+            </section>
+          )}
+
+          {boardView === 'autonomy' && (
+            <section
+              aria-label={lang === 'hi' ? 'मेरी आवाज़, मेरे नियम' : 'My Voice, My Rules'}
+              className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 sm:p-5 space-y-4"
+            >
+              <div className="space-y-1">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  {lang === 'hi'
+                    ? 'मेरी आवाज़, मेरे नियम — सहमति और स्वायत्तता'
+                    : 'My Voice, My Rules — Consent & Personal Autonomy'}
+                </h2>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  {lang === 'hi'
+                    ? 'चुनने पर तुरंत बोलने और संदेश बनाने के लिए नीचे कोई विकल्प चुनें।'
+                    : 'Select any statement below to speak aloud immediately and set clear boundaries.'}
+                </p>
+              </div>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 ${spacingClass}`}>
+                {MY_VOICE_MY_RULES_PHRASES.map((item) => {
+                  const text = lang === 'hi' ? item.textHi : item.textEn;
+                  return (
+                    <GazeButton
+                      key={item.id}
+                      gazeId={`comm_${item.id}`}
+                      gazeLabel={text}
+                      variant="default"
+                      onClick={() => handleQuickAccessSpeak(text)}
+                      className="justify-start text-left"
+                    >
+                      <Volume2 className="w-4 h-4 shrink-0 text-teal-700 dark:text-teal-400" />
+                      <span>{text}</span>
+                    </GazeButton>
+                  );
+                })}
+              </div>
             </section>
           )}
 

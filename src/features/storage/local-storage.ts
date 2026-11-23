@@ -12,6 +12,13 @@ import {
   CONTACTS_CHANGED_EVENT,
   EMERGENCY_CONTACTS_STORAGE_KEY,
 } from '../contacts/emergency-contact-service';
+import {
+  DEFAULT_LOCAL_PATIENT_ID,
+  getActivePatientId,
+  getPatientScopedStorageKey,
+} from './patient-accounts';
+import { eraseGamesState, eraseMusicState } from './games-music-storage';
+import { deleteAllAudioForPatient } from './indexeddb-audio';
 
 const KEYS = {
   SETTINGS: 'nayansathi_settings_v1',
@@ -57,13 +64,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
   },
   communication: {
     language: 'en',
+    secondaryLanguage: 'hi',
     speechRate: 0.95,
     preferredVoiceEn: '',
     preferredVoiceHi: '',
     activeContext: 'home',
+    preferredSentenceLength: 'balanced',
+    communicationInstructions: '',
   },
   privacy: {
     historyConsentEnabled: false, // Strictly OFF by default
+    medicalEmergencyCardConsent: false,
+    shareWellbeingWithCaregivers: false,
+    shareHandoverWithCaregivers: false,
+    hidePrivateIdentityFields: true,
   },
 };
 
@@ -73,7 +87,19 @@ export const DEFAULT_PROFILE: PatientProfile = {
   caregiverName: '',
   notes: '',
   onboardingCompleted: false,
+  dateOfBirth: '',
+  occupation: '',
+  education: '',
+  city: '',
+  state: '',
+  country: '',
+  personalIntroduction: '',
+  photoAssetId: '',
 };
+
+function scoped(baseKey: string, patientId?: string): string {
+  return getPatientScopedStorageKey(baseKey, patientId ?? getActivePatientId());
+}
 
 function safeRead<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -95,8 +121,8 @@ function safeWrite<T>(key: string, value: T): void {
   }
 }
 
-export function loadSettings(): AppSettings {
-  const saved = safeRead<Partial<AppSettings>>(KEYS.SETTINGS, {});
+export function loadSettings(patientId?: string): AppSettings {
+  const saved = safeRead<Partial<AppSettings>>(scoped(KEYS.SETTINGS, patientId), {});
   const savedEye: Partial<EyeTrackingSettings> = saved.eyeTracking || {};
 
   // Legacy builds stored pixel-scale beta (e.g. 0.015). Normalized viewport coords require ~0.9.
@@ -137,15 +163,14 @@ export function loadSettings(): AppSettings {
   };
 }
 
-export function saveSettings(settings: AppSettings): void {
-  safeWrite(KEYS.SETTINGS, settings);
+export function saveSettings(settings: AppSettings, patientId?: string): void {
+  safeWrite(scoped(KEYS.SETTINGS, patientId), settings);
 }
 
-export function loadCalibration(): CalibrationProfile | null {
-  const saved = safeRead<CalibrationProfile | null>(KEYS.CALIBRATION, null);
+export function loadCalibration(patientId?: string): CalibrationProfile | null {
+  const saved = safeRead<CalibrationProfile | null>(scoped(KEYS.CALIBRATION, patientId), null);
   if (!saved || !saved.model) return null;
 
-  // Discard incompatible pre-upgrade calibration shapes cleanly so user recalibrates safely
   if (
     !Array.isArray(saved.model.weightsX) ||
     !Array.isArray(saved.model.weightsY) ||
@@ -161,38 +186,41 @@ export function loadCalibration(): CalibrationProfile | null {
   return saved;
 }
 
-export function saveCalibration(profile: CalibrationProfile): void {
-  safeWrite(KEYS.CALIBRATION, profile);
+export function saveCalibration(profile: CalibrationProfile, patientId?: string): void {
+  safeWrite(scoped(KEYS.CALIBRATION, patientId), profile);
 }
 
-export function eraseCalibration(): void {
+export function eraseCalibration(patientId?: string): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(KEYS.CALIBRATION);
+  window.localStorage.removeItem(scoped(KEYS.CALIBRATION, patientId));
 }
 
-export function loadPatientProfile(): PatientProfile {
-  return { ...DEFAULT_PROFILE, ...safeRead<Partial<PatientProfile>>(KEYS.PROFILE, {}) };
+export function loadPatientProfile(patientId?: string): PatientProfile {
+  return {
+    ...DEFAULT_PROFILE,
+    ...safeRead<Partial<PatientProfile>>(scoped(KEYS.PROFILE, patientId), {}),
+  };
 }
 
-export function savePatientProfile(profile: PatientProfile): void {
-  safeWrite(KEYS.PROFILE, profile);
+export function savePatientProfile(profile: PatientProfile, patientId?: string): void {
+  safeWrite(scoped(KEYS.PROFILE, patientId), profile);
 }
 
-export function loadCategories(): PhraseCategory[] {
-  const custom = safeRead<PhraseCategory[]>(KEYS.CATEGORIES, []);
+export function loadCategories(patientId?: string): PhraseCategory[] {
+  const custom = safeRead<PhraseCategory[]>(scoped(KEYS.CATEGORIES, patientId), []);
   return [...DEFAULT_CATEGORIES, ...custom.filter((c) => c.isCustom)];
 }
 
-export function saveCustomCategories(categories: PhraseCategory[]): void {
+export function saveCustomCategories(categories: PhraseCategory[], patientId?: string): void {
   safeWrite(
-    KEYS.CATEGORIES,
+    scoped(KEYS.CATEGORIES, patientId),
     categories.filter((c) => c.isCustom)
   );
 }
 
-export function loadPhrases(): PhraseItem[] {
-  const savedCustom = safeRead<PhraseItem[]>(KEYS.PHRASES, []);
-  const favorites = new Set(loadFavoriteIds());
+export function loadPhrases(patientId?: string): PhraseItem[] {
+  const savedCustom = safeRead<PhraseItem[]>(scoped(KEYS.PHRASES, patientId), []);
+  const favorites = new Set(loadFavoriteIds(patientId));
   const customMap = new Map(savedCustom.map((p) => [p.id, p]));
 
   const mergedDefaults = DEFAULT_PHRASES.map((p) => ({
@@ -208,65 +236,81 @@ export function loadPhrases(): PhraseItem[] {
   return [...mergedDefaults, ...pureCustom];
 }
 
-export function saveCustomPhrases(phrases: PhraseItem[]): void {
+export function saveCustomPhrases(phrases: PhraseItem[], patientId?: string): void {
   const customOnly = phrases.filter((p) => p.isCustom);
-  safeWrite(KEYS.PHRASES, customOnly);
+  safeWrite(scoped(KEYS.PHRASES, patientId), customOnly);
 }
 
-export function loadFavoriteIds(): string[] {
-  return safeRead<string[]>(KEYS.FAVORITES, []);
+export function loadFavoriteIds(patientId?: string): string[] {
+  return safeRead<string[]>(scoped(KEYS.FAVORITES, patientId), []);
 }
 
-export function saveFavoriteIds(ids: string[]): void {
-  safeWrite(KEYS.FAVORITES, Array.from(new Set(ids)));
+export function saveFavoriteIds(ids: string[], patientId?: string): void {
+  safeWrite(scoped(KEYS.FAVORITES, patientId), Array.from(new Set(ids)));
 }
 
-export function loadRecentPhrases(): string[] {
-  return safeRead<string[]>(KEYS.RECENTS, []);
+export function loadRecentPhrases(patientId?: string): string[] {
+  return safeRead<string[]>(scoped(KEYS.RECENTS, patientId), []);
 }
 
-export function pushRecentPhrase(phrase: string): string[] {
+export function pushRecentPhrase(phrase: string, patientId?: string): string[] {
   const clean = phrase.trim();
-  if (!clean) return loadRecentPhrases();
-  const current = loadRecentPhrases().filter((p) => p !== clean);
+  if (!clean) return loadRecentPhrases(patientId);
+  const current = loadRecentPhrases(patientId).filter((p) => p !== clean);
   const next = [clean, ...current].slice(0, 10);
-  safeWrite(KEYS.RECENTS, next);
+  safeWrite(scoped(KEYS.RECENTS, patientId), next);
   return next;
 }
 
-export function loadCommunicationHistory(): CommunicationHistoryEntry[] {
-  return safeRead<CommunicationHistoryEntry[]>(KEYS.HISTORY, []);
+export function loadCommunicationHistory(patientId?: string): CommunicationHistoryEntry[] {
+  return safeRead<CommunicationHistoryEntry[]>(scoped(KEYS.HISTORY, patientId), []);
 }
 
 export function appendCommunicationHistory(
   entry: CommunicationHistoryEntry,
-  consentEnabled: boolean
+  consentEnabled: boolean,
+  patientId?: string
 ): CommunicationHistoryEntry[] {
   if (!consentEnabled) {
-    return loadCommunicationHistory();
+    return loadCommunicationHistory(patientId);
   }
-  const current = loadCommunicationHistory();
+  const current = loadCommunicationHistory(patientId);
   const next = [entry, ...current].slice(0, 100);
-  safeWrite(KEYS.HISTORY, next);
+  safeWrite(scoped(KEYS.HISTORY, patientId), next);
   return next;
 }
 
-export function deleteCommunicationHistoryEntry(id: string): CommunicationHistoryEntry[] {
-  const next = loadCommunicationHistory().filter((e) => e.id !== id);
-  safeWrite(KEYS.HISTORY, next);
+export function deleteCommunicationHistoryEntry(
+  id: string,
+  patientId?: string
+): CommunicationHistoryEntry[] {
+  const next = loadCommunicationHistory(patientId).filter((e) => e.id !== id);
+  safeWrite(scoped(KEYS.HISTORY, patientId), next);
   return next;
 }
 
-export function clearAllCommunicationHistory(): void {
+export function clearAllCommunicationHistory(patientId?: string): void {
   if (typeof window === 'undefined') return;
-  window.localStorage.removeItem(KEYS.HISTORY);
+  window.localStorage.removeItem(scoped(KEYS.HISTORY, patientId));
 }
 
-export function clearAllLocalData(): void {
+export function clearPatientStorageKeys(patientId: string): void {
   if (typeof window === 'undefined') return;
-  Object.values(KEYS).forEach((k) => window.localStorage.removeItem(k));
-  window.localStorage.removeItem(EMERGENCY_CONTACTS_STORAGE_KEY);
+  Object.values(KEYS).forEach((k) => window.localStorage.removeItem(scoped(k, patientId)));
+  window.localStorage.removeItem(
+    getPatientScopedStorageKey(EMERGENCY_CONTACTS_STORAGE_KEY, patientId)
+  );
+  if (patientId === DEFAULT_LOCAL_PATIENT_ID) {
+    window.localStorage.removeItem(EMERGENCY_CONTACTS_STORAGE_KEY);
+  }
+  eraseGamesState(patientId);
+  eraseMusicState(patientId);
+  void deleteAllAudioForPatient(patientId);
   if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
     window.dispatchEvent(new CustomEvent(CONTACTS_CHANGED_EVENT));
   }
+}
+
+export function clearAllLocalData(): void {
+  clearPatientStorageKeys(getActivePatientId());
 }

@@ -432,7 +432,7 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({ onNavigate }) 
                         : 'Needs Recalibration in Highlighted Zones'}
                   </h2>
                   <p className="text-sm text-slate-600 dark:text-slate-300">
-                    Held-out validation tests the final 30% of each fixation against a model trained on the first 70%. Run real-time Diagnostic Tests on the Patient Hub to measure live screen accuracy.
+                    Held-out validation tests the final 30% of each fixation against a model trained on the first 70%. Run real-time Diagnostic Tests in Life Hub to measure live screen accuracy.
                   </p>
                 </div>
               </div>
@@ -440,10 +440,10 @@ export const CalibrationPage: React.FC<CalibrationPageProps> = ({ onNavigate }) 
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  onClick={() => onNavigate('dashboard')}
+                  onClick={() => onNavigate('life-hub')}
                   className="px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
-                  Open Diagnostic Mode
+                  Open Life Hub
                 </button>
                 <button
                   type="button"

@@ -245,7 +245,7 @@ export interface AISuggestion {
 export interface EyeTrackingSettings {
   enabled: boolean;
   dwellDurationMs: number; // 500..3000 (default 1000)
-  cursorSize: number; // 24..64
+  cursorSize: number; // 22..36
   cursorVisible: boolean;
   minCutoff: number; // 1-Euro minCutoff (Hz)
   beta: number; // 1-Euro beta (normalized viewport speed scale)
@@ -275,14 +275,21 @@ export interface InterfaceSettings {
 
 export interface CommunicationSettings {
   language: Language;
+  secondaryLanguage: Language;
   speechRate: number; // 0.6..1.5
   preferredVoiceEn: string;
   preferredVoiceHi: string;
   activeContext: CommunicationContextId;
+  preferredSentenceLength: 'concise' | 'balanced' | 'detailed';
+  communicationInstructions: string;
 }
 
 export interface PrivacySettings {
   historyConsentEnabled: boolean;
+  medicalEmergencyCardConsent: boolean;
+  shareWellbeingWithCaregivers: boolean;
+  shareHandoverWithCaregivers: boolean;
+  hidePrivateIdentityFields: boolean;
 }
 
 export interface PatientProfile {
@@ -291,6 +298,20 @@ export interface PatientProfile {
   caregiverName: string;
   notes: string;
   onboardingCompleted: boolean;
+  dateOfBirth?: string; // ISO YYYY-MM-DD (private by default)
+  occupation?: string;
+  education?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  personalIntroduction?: string;
+  photoAssetId?: string;
+}
+
+export interface PatientAccountSummary {
+  id: string;
+  displayName: string;
+  createdAt: string;
 }
 
 export interface AppSettings {
@@ -299,3 +320,442 @@ export interface AppSettings {
   communication: CommunicationSettings;
   privacy: PrivacySettings;
 }
+
+// --- Personal Independence & Life Hub Platform Types ---
+
+export type ChoiceCategoryId =
+  | 'eat'
+  | 'drink'
+  | 'wear'
+  | 'watch'
+  | 'activity'
+  | 'where'
+  | 'person';
+
+export interface PersonalChoiceOption {
+  id: string;
+  category: ChoiceCategoryId;
+  labelEn: string;
+  labelHi: string;
+  iconKey: string;
+  photoAssetId?: string;
+  isCustom?: boolean;
+}
+
+export interface ConfirmedChoiceRecord {
+  id: string;
+  category: ChoiceCategoryId;
+  optionId: string;
+  label: string;
+  confirmedAt: string;
+  requestId?: string;
+}
+
+export interface BelongingItem {
+  id: string;
+  labelEn: string;
+  labelHi: string;
+  iconKey: string;
+  photoAssetId?: string;
+  isCustom?: boolean;
+}
+
+export type HelpRequestCategory =
+  | 'choice'
+  | 'comfort'
+  | 'belonging'
+  | 'room'
+  | 'medicine'
+  | 'appointment'
+  | 'routine'
+  | 'general';
+
+export type HelpRequestStatus =
+  | 'pending'
+  | 'accepted'
+  | 'in_progress'
+  | 'completed'
+  | 'cancelled'
+  | 'resolved';
+
+export interface HelpRequest {
+  id: string;
+  patientId: string;
+  category: HelpRequestCategory;
+  title: string;
+  details?: string;
+  status: HelpRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  acknowledgedBy?: string;
+  caregiverNote?: string;
+  caregiverConnected: boolean;
+}
+
+export type MedicineFrequency = 'daily' | 'twice_daily' | 'weekly' | 'as_needed';
+
+export interface MedicineReminder {
+  id: string;
+  name: string;
+  description: string;
+  reminderTime: string; // HH:mm
+  frequency: MedicineFrequency;
+  instructions?: string;
+  startDate: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
+  active: boolean;
+  snoozedUntilIso?: string;
+  lastAcknowledgedDate?: string;
+  createdAt: string;
+}
+
+export type MedicineAckAction = 'taken' | 'snoozed' | 'help' | 'call_caregiver';
+
+export interface MedicineAcknowledgment {
+  id: string;
+  reminderId: string;
+  medicineName: string;
+  action: MedicineAckAction;
+  timestamp: string;
+  note?: string;
+}
+
+export interface BodyDiscomfortEntry {
+  id: string;
+  bodyArea: string;
+  discomfortType: string;
+  severity: 'mild' | 'moderate' | 'severe';
+  startedWhen: string;
+  details: string;
+  createdAt: string;
+}
+
+export interface MedicalInformation {
+  allergies: string;
+  existingConditions: string;
+  medications: string;
+  careInstructions: string;
+  preferredDoctor: string;
+  doctorContact: string;
+  preferredHospital: string;
+  emergencyCaregiverInfo: string;
+  updatedAt?: string;
+}
+
+export interface WellbeingEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  mood: string;
+  sleepQuality: string;
+  appetite: string;
+  discomfort: string;
+  comfortLevel: string;
+  generalWellbeing: string;
+  notes: string;
+  sharedWithCaregiver: boolean;
+  createdAt: string;
+}
+
+export type RoomDeviceType = 'lights' | 'fan' | 'tv' | 'curtains' | 'temperature' | 'other';
+
+export interface SmartHomeIntegrationConfig {
+  enabled: boolean;
+  endpointUrl: string; // e.g. Home Assistant URL; empty in unconfigured mode
+  entityMap: Partial<Record<RoomDeviceType, string>>;
+}
+
+export interface RoomControlLogEntry {
+  id: string;
+  deviceType: RoomDeviceType;
+  deviceLabel: string;
+  command: string;
+  mode: 'smart_device' | 'caregiver';
+  status: 'confirmed' | 'failed' | 'pending_caregiver' | 'accepted' | 'in_progress' | 'completed';
+  message: string;
+  helpRequestId?: string;
+  timestamp: string;
+}
+
+export type RoutineSection =
+  | 'morning'
+  | 'hygiene'
+  | 'meals'
+  | 'appointments'
+  | 'medication'
+  | 'rest'
+  | 'evening';
+
+export type RoutineStepStatus = 'pending' | 'done' | 'skipped' | 'help' | 'later';
+
+export interface DailyRoutineItem {
+  id: string;
+  section: RoutineSection;
+  titleEn: string;
+  titleHi: string;
+  instructionsEn: string;
+  instructionsHi: string;
+  scheduledTime?: string;
+  status: RoutineStepStatus;
+  updatedAt?: string;
+}
+
+export interface ShoppingCatalogItem {
+  id: string;
+  nameEn: string;
+  nameHi: string;
+  category: string;
+  photoAssetId?: string;
+  isCustom?: boolean;
+}
+
+export interface ShoppingListEntry {
+  id: string;
+  itemId: string;
+  name: string;
+  quantity: number;
+  note?: string;
+}
+
+export interface RestaurantMenuItem {
+  id: string;
+  nameEn: string;
+  nameHi: string;
+  category: 'meals' | 'snacks' | 'drinks' | 'dessert';
+  photoAssetId?: string;
+}
+
+export type AppointmentResponseStatus =
+  | 'scheduled'
+  | 'ready'
+  | 'need_more_time'
+  | 'need_help_ready'
+  | 'contact_caregiver'
+  | 'reschedule_requested';
+
+export interface AppointmentItem {
+  id: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  location: string;
+  contactInfo: string;
+  notes: string;
+  patientStatus: AppointmentResponseStatus;
+  updatedAt: string;
+}
+
+export interface CommunicationPassport {
+  howICommunicate: string;
+  preferredLanguage: string;
+  howISayYesNo: string;
+  responseTimeNeeded: string;
+  communicationPreferences: string;
+  whatMakesMeComfortable: string;
+  whatHelpsMeCommunicate: string;
+  caregiverInstructions: string;
+  updatedAt: string;
+}
+
+export interface ImportantPerson {
+  id: string;
+  name: string;
+  relationship: string;
+  category: 'family' | 'friend' | 'caregiver' | 'doctor' | 'other';
+  phone?: string;
+  email?: string;
+  photoAssetId?: string;
+  favoritePhrases: string[];
+  createdAt: string;
+}
+
+export type CaregiverRole = 'primary' | 'secondary' | 'family' | 'support_worker';
+
+export interface CaregiverRelationship {
+  id: string;
+  name: string;
+  role: CaregiverRole;
+  relationshipLabel: string;
+  phone: string;
+  email: string;
+  consentGranted: boolean;
+  canEditPhrases: boolean;
+  canViewHistory: boolean;
+  canViewMedical: boolean;
+  canEditMedical: boolean;
+  canManageRoutines: boolean;
+  canManageRequests: boolean;
+  canViewHandover: boolean;
+  canWriteHandover: boolean;
+  grantedAt?: string;
+}
+
+export type CaregiverPermissionKey =
+  | 'canEditPhrases'
+  | 'canViewHistory'
+  | 'canViewMedical'
+  | 'canEditMedical'
+  | 'canManageRoutines'
+  | 'canManageRequests'
+  | 'canViewHandover'
+  | 'canWriteHandover';
+
+export interface CaregiverHandoverNote {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorRole: CaregiverRole;
+  importantRequests: string;
+  activitiesCompleted: string;
+  personalPreferences: string;
+  pendingAssistance: string;
+  patientSelectedInfo: string;
+  consentShared: boolean;
+  createdAt: string;
+}
+
+export interface FavouriteItem {
+  id: string;
+  category: 'food' | 'music' | 'movie' | 'sport' | 'colour' | 'activity' | 'other';
+  label: string;
+  photoAssetId?: string;
+  notes?: string;
+}
+
+export interface LifeHubState {
+  choices: PersonalChoiceOption[];
+  confirmedChoices: ConfirmedChoiceRecord[];
+  customComfortRequests: string[];
+  belongings: BelongingItem[];
+  helpRequests: HelpRequest[];
+  medicineReminders: MedicineReminder[];
+  medicineAcks: MedicineAcknowledgment[];
+  medicalInfo: MedicalInformation;
+  discomfortEntries: BodyDiscomfortEntry[];
+  wellbeingJournal: WellbeingEntry[];
+  smartHomeConfig: SmartHomeIntegrationConfig;
+  roomControlLogs: RoomControlLogEntry[];
+  routines: DailyRoutineItem[];
+  shoppingCatalog: ShoppingCatalogItem[];
+  shoppingList: ShoppingListEntry[];
+  restaurantSelectedDishes: string[];
+  restaurantPreferences: string[];
+  appointments: AppointmentItem[];
+  passport: CommunicationPassport;
+  importantPeople: ImportantPerson[];
+  interests: string[];
+  favourites: FavouriteItem[];
+  caregivers: CaregiverRelationship[];
+  handoverNotes: CaregiverHandoverNote[];
+}
+
+// --- Games Module Types ---
+
+export type GameId =
+  | 'tic-tac-toe'
+  | 'chess'
+  | 'memory-match'
+  | 'picture-puzzle'
+  | 'connect-four'
+  | 'pattern-sequence';
+
+export type GameDifficulty = 'easy' | 'medium' | 'hard';
+
+export interface GameScoreSummary {
+  wins: number;
+  losses: number;
+  draws: number;
+  gamesPlayed: number;
+  bestMoves?: number;
+  puzzlesSolved: number;
+  lastPlayedAt?: string;
+}
+
+export interface GameHistoryEntry {
+  id: string;
+  gameId: GameId;
+  summary: string;
+  outcome: 'win' | 'loss' | 'draw' | 'completed';
+  difficulty: GameDifficulty;
+  moves: number;
+  timestamp: string;
+}
+
+export interface CustomMemoryPictureCard {
+  id: string;
+  label: string;
+  assetId: string;
+}
+
+export interface GamesPatientState {
+  saveActivityEnabled: boolean;
+  preferredDifficulty: GameDifficulty;
+  audioInstructionsEnabled: boolean;
+  customPuzzlePhotoIds: string[];
+  customMemoryCards: CustomMemoryPictureCard[];
+  scores: Record<GameId, GameScoreSummary>;
+  history: GameHistoryEntry[];
+}
+
+// --- Music Module Types ---
+
+export type MusicCategoryId =
+  | 'hindi_songs'
+  | 'english_songs'
+  | 'devotional'
+  | 'instrumental'
+  | 'classical'
+  | 'relaxing'
+  | 'nature_sounds'
+  | 'personal_recordings'
+  | 'custom_music';
+
+export type MusicRepeatMode = 'off' | 'all' | 'one';
+
+export interface MusicTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  category: MusicCategoryId;
+  audioAssetId: string;
+  coverAssetId?: string;
+  durationSec: number;
+  mimeType: string;
+  fileSizeBytes: number;
+  authorizedConfirmed: boolean;
+  sourceType: 'uploaded_local' | 'supabase_private';
+  createdAt: string;
+}
+
+export interface MusicPlaylist {
+  id: string;
+  name: string;
+  trackIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MusicPreferences {
+  favouriteGenres: MusicCategoryId[];
+  favouriteArtists: string[];
+  preferredPlaylistIds: string[];
+  favouriteNatureSounds: string[];
+  trackRecentlyPlayed: boolean;
+  defaultVolume: number;
+  repeatMode: MusicRepeatMode;
+  shuffleEnabled: boolean;
+}
+
+export interface RecentlyPlayedEntry {
+  trackId: string;
+  playedAt: string;
+}
+
+export interface MusicPatientState {
+  tracks: MusicTrack[];
+  favouriteTrackIds: string[];
+  playlists: MusicPlaylist[];
+  recentlyPlayed: RecentlyPlayedEntry[];
+  preferences: MusicPreferences;
+}
+

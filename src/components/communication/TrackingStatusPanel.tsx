@@ -334,14 +334,14 @@ export const TrackingStatusPanel: React.FC<TrackingStatusPanelProps> = ({ onNavi
         {onNavigate && (
           <GazeButton
             gazeId="track_panel_diagnostics"
-            gazeLabel="Detailed Diagnostics"
+            gazeLabel="Life Hub & Diagnostics"
             variant="default"
             sizeOverride="standard"
-            onClick={() => onNavigate('dashboard')}
+            onClick={() => onNavigate('life-hub')}
             className="whitespace-nowrap"
           >
             <Activity className="w-4 h-4" />
-            <span>{lang === 'hi' ? 'डायग्नोस्टिक्स' : 'Diagnostics'}</span>
+            <span>{lang === 'hi' ? 'जीवन केंद्र' : 'Life Hub'}</span>
           </GazeButton>
         )}
       </div>

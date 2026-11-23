@@ -5,6 +5,11 @@ import {
   validateContactInput,
   type ContactInput,
 } from './contact-utils';
+import {
+  DEFAULT_LOCAL_PATIENT_ID,
+  getActivePatientId,
+  getPatientScopedStorageKey,
+} from '../storage/patient-accounts';
 
 export const EMERGENCY_CONTACTS_STORAGE_KEY = 'nayanSathi.emergencyContacts';
 export const LEGACY_CONTACTS_STORAGE_KEY = 'nayansathi_contacts_v1';
@@ -174,11 +179,14 @@ export function readContactsFromLocalStorage(): ContactLoadResult {
     };
   }
 
+  const patientId = getActivePatientId();
+  const scopedKey = getPatientScopedStorageKey(EMERGENCY_CONTACTS_STORAGE_KEY, patientId);
+
   try {
-    let raw = storage.getItem(EMERGENCY_CONTACTS_STORAGE_KEY);
+    let raw = storage.getItem(scopedKey);
     let migratedFromLegacy = false;
 
-    if (raw === null) {
+    if (raw === null && patientId === DEFAULT_LOCAL_PATIENT_ID) {
       const legacyRaw = storage.getItem(LEGACY_CONTACTS_STORAGE_KEY);
       if (legacyRaw !== null) {
         raw = legacyRaw;
@@ -233,16 +241,21 @@ function writeContactsToLocalStorage(contacts: EmergencyContact[]): { ok: boolea
     };
   }
 
+  const patientId = getActivePatientId();
+  const scopedKey = getPatientScopedStorageKey(EMERGENCY_CONTACTS_STORAGE_KEY, patientId);
+
   try {
     const normalized = enforcePrimaryInvariant(contacts);
     if (normalized.length === 0) {
-      storage.removeItem(EMERGENCY_CONTACTS_STORAGE_KEY);
-      storage.removeItem(LEGACY_CONTACTS_STORAGE_KEY);
+      storage.removeItem(scopedKey);
+      if (patientId === DEFAULT_LOCAL_PATIENT_ID) {
+        storage.removeItem(LEGACY_CONTACTS_STORAGE_KEY);
+      }
     } else {
       const payload = JSON.stringify(normalized);
-      storage.setItem(EMERGENCY_CONTACTS_STORAGE_KEY, payload);
+      storage.setItem(scopedKey, payload);
       // Verify the write actually persisted
-      if (storage.getItem(EMERGENCY_CONTACTS_STORAGE_KEY) !== payload) {
+      if (storage.getItem(scopedKey) !== payload) {
         return {
           ok: false,
           error: 'Browser storage did not retain the saved emergency contact.',

@@ -329,7 +329,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => onNavigate('dashboard')}
+                  onClick={() => onNavigate('life-hub')}
                   className="px-5 py-2.5 text-sm font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-900 inline-flex items-center gap-2 cursor-pointer"
                 >
                   <Eye className="w-4 h-4" />
@@ -517,10 +517,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
             </button>
             <button
               type="button"
-              onClick={() => onNavigate('dashboard')}
+              onClick={() => onNavigate('life-hub')}
               className="hover:text-slate-900 dark:hover:text-white cursor-pointer"
             >
-              Patient Hub
+              Life Hub
             </button>
             <button
               type="button"

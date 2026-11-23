@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppStateProvider } from './context/AppStateContext';
 import { EmergencyContactProvider } from './context/EmergencyContactContext';
+import { LifeHubProvider } from './context/LifeHubContext';
 import { EyeTrackingProvider } from './hooks/useEyeTracking';
 import { AppShell, type AppRoute } from './components/layout/AppShell';
 import { GazeCursor } from './components/gaze/GazeCursor';
@@ -8,18 +9,20 @@ import { LandingPage } from './pages/LandingPage';
 import { OnboardingPage } from './pages/OnboardingPage';
 import { CommunicatePage } from './pages/CommunicatePage';
 import { CalibrationPage } from './pages/CalibrationPage';
-import { PatientDashboardPage } from './pages/PatientDashboardPage';
+import { LifeHubPage } from './pages/LifeHubPage';
 import { CaregiverDashboardPage } from './pages/CaregiverDashboardPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { MyProfilePage } from './pages/MyProfilePage';
 
 function routeFromPath(pathname: string): AppRoute {
   const clean = pathname.replace(/\/+$/, '') || '/';
   if (clean === '/onboarding') return 'onboarding';
   if (clean === '/communicate') return 'communicate';
   if (clean === '/calibration') return 'calibration';
-  if (clean === '/dashboard') return 'dashboard';
+  if (clean === '/life-hub' || clean === '/dashboard') return 'life-hub';
   if (clean === '/caregiver') return 'caregiver';
   if (clean === '/settings') return 'settings';
+  if (clean === '/profile') return 'profile';
   return 'landing';
 }
 
@@ -62,10 +65,11 @@ function AppRouter() {
         >
           {route === 'onboarding' && <OnboardingPage onNavigate={navigate} />}
           {route === 'communicate' && <CommunicatePage onNavigate={navigate} />}
+          {route === 'life-hub' && <LifeHubPage onNavigate={navigate} />}
           {route === 'calibration' && <CalibrationPage onNavigate={navigate} />}
-          {route === 'dashboard' && <PatientDashboardPage onNavigate={navigate} />}
           {route === 'caregiver' && <CaregiverDashboardPage onNavigate={navigate} />}
-          {route === 'settings' && <SettingsPage />}
+          {route === 'settings' && <SettingsPage onNavigate={navigate} />}
+          {route === 'profile' && <MyProfilePage onNavigate={navigate} />}
         </AppShell>
       )}
     </>
@@ -76,9 +80,11 @@ export default function App() {
   return (
     <AppStateProvider>
       <EmergencyContactProvider>
-        <EyeTrackingProvider>
-          <AppRouter />
-        </EyeTrackingProvider>
+        <LifeHubProvider>
+          <EyeTrackingProvider>
+            <AppRouter />
+          </EyeTrackingProvider>
+        </LifeHubProvider>
       </EmergencyContactProvider>
     </AppStateProvider>
   );

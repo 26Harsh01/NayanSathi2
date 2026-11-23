@@ -1,9 +1,10 @@
 import React from 'react';
 import {
-  Activity,
+  Bell,
   Crosshair,
   Eye,
   HeartHandshake,
+  LayoutGrid,
   MessageSquare,
   Pause,
   Play,
@@ -13,15 +14,17 @@ import {
 } from 'lucide-react';
 import { useEyeTracking } from '../../hooks/useEyeTracking';
 import { useAppState } from '../../context/AppStateContext';
+import { useLifeHub } from '../../context/LifeHubContext';
 
 export type AppRoute =
   | 'landing'
   | 'onboarding'
   | 'communicate'
+  | 'life-hub'
   | 'calibration'
-  | 'dashboard'
   | 'caregiver'
-  | 'settings';
+  | 'settings'
+  | 'profile';
 
 interface AppShellProps {
   currentRoute: AppRoute;
@@ -39,6 +42,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const { isRunning, isPaused, setIsPaused, startTracking, stopTracking, status } =
     useEyeTracking();
   const { settings, setLanguage, calibration, profile } = useAppState();
+  const { dueMedicines, photosMap } = useLifeHub();
   const lang = settings.communication.language;
 
   const hideSidebar = minimalHeader || currentRoute === 'calibration';
@@ -51,21 +55,21 @@ export const AppShell: React.FC<AppShellProps> = ({
       icon: <MessageSquare className="w-4 h-4 shrink-0" />,
     },
     {
+      route: 'life-hub',
+      labelEn: 'Life Hub',
+      labelHi: 'जीवन केंद्र',
+      icon: <LayoutGrid className="w-4 h-4 shrink-0" />,
+    },
+    {
       route: 'calibration',
       labelEn: 'Calibrate',
       labelHi: 'कैलिब्रेट',
       icon: <Crosshair className="w-4 h-4 shrink-0" />,
     },
     {
-      route: 'dashboard',
-      labelEn: 'Patient Hub',
-      labelHi: 'रोगी केंद्र',
-      icon: <Activity className="w-4 h-4 shrink-0" />,
-    },
-    {
       route: 'caregiver',
-      labelEn: 'Caregiver Portal',
-      labelHi: 'देखभालकर्ता पोर्टल',
+      labelEn: 'Caregiver',
+      labelHi: 'देखभालकर्ता',
       icon: <HeartHandshake className="w-4 h-4 shrink-0" />,
     },
     {
@@ -76,7 +80,11 @@ export const AppShell: React.FC<AppShellProps> = ({
     },
   ];
 
-  const activeNavItem = navItems.find((i) => i.route === currentRoute);
+  const activeNavItem =
+    navItems.find((i) => i.route === currentRoute) ??
+    (currentRoute === 'profile'
+      ? { labelEn: 'My Profile', labelHi: 'मेरी प्रोफ़ाइल' }
+      : null);
 
   const statusLabel =
     status === 'tracking'
@@ -119,12 +127,14 @@ export const AppShell: React.FC<AppShellProps> = ({
                       ? 'कैमरा बंद'
                       : 'Camera Off';
 
-  const patientInitials = (profile.name || 'Friend')
+  const displayName = profile.preferredName || profile.name || 'Guest User';
+  const patientInitials = displayName
     .trim()
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('');
+  const avatarUrl = profile.photoAssetId ? photosMap[profile.photoAssetId] : undefined;
 
   return (
     <div className="min-h-screen flex bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -132,7 +142,7 @@ export const AppShell: React.FC<AppShellProps> = ({
       {!hideSidebar && (
         <aside
           aria-label="Primary Sidebar Navigation"
-          className="hidden lg:flex lg:flex-col lg:w-56 xl:w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 h-screen"
+          className="hidden lg:flex lg:flex-col lg:w-56 xl:w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 h-screen no-print"
         >
           <div className="h-16 px-5 border-b border-slate-200 dark:border-slate-800 flex items-center">
             <button
@@ -176,22 +186,40 @@ export const AppShell: React.FC<AppShellProps> = ({
             })}
           </nav>
 
-          {/* Patient Profile Footer */}
+          {/* Bottom Patient Profile Card -> My Profile */}
           <div className="p-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
-              onClick={() => onNavigate('dashboard')}
-              className="w-full p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-3 text-left transition-colors cursor-pointer"
+              data-gaze-target="nav_my_profile"
+              data-gaze-label="My Profile"
+              onClick={() => onNavigate('profile')}
+              className={`w-full p-2.5 rounded-xl flex items-center gap-3 text-left cursor-pointer ${
+                currentRoute === 'profile'
+                  ? 'bg-teal-700 text-white dark:bg-teal-600'
+                  : 'text-slate-900 dark:text-white'
+              }`}
             >
-              <div className="w-9 h-9 rounded-lg bg-slate-900 dark:bg-teal-700 text-white text-xs font-bold flex items-center justify-center shrink-0">
-                {patientInitials || <User className="w-4 h-4" />}
-              </div>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="w-9 h-9 rounded-lg object-cover shrink-0 border border-slate-300 dark:border-slate-700"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-slate-900 dark:bg-teal-700 text-white text-xs font-bold flex items-center justify-center shrink-0">
+                  {patientInitials || <User className="w-4 h-4" />}
+                </div>
+              )}
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                  {profile.name || 'Guest User'}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {lang === 'hi' ? 'रोगी प्रोफ़ाइल' : 'Patient Profile'}
+                <p className="text-sm font-semibold truncate">{displayName}</p>
+                <p
+                  className={`text-xs truncate ${
+                    currentRoute === 'profile'
+                      ? 'text-teal-100'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {lang === 'hi' ? 'मेरी प्रोफ़ाइल' : 'My Profile'}
                 </p>
               </div>
             </button>
@@ -201,7 +229,7 @@ export const AppShell: React.FC<AppShellProps> = ({
 
       {/* Main Column */}
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm">
+        <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm no-print">
           <div className="max-w-[1480px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
             <div className="flex items-center gap-4 min-w-0">
               <button
@@ -225,6 +253,17 @@ export const AppShell: React.FC<AppShellProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5 shrink-0">
+              {dueMedicines.length > 0 && !hideSidebar && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('life-hub')}
+                  className="px-2.5 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/70 border border-amber-400 dark:border-amber-700 text-amber-950 dark:text-amber-200 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  <span className="tabular-nums">{dueMedicines.length} Med Due</span>
+                </button>
+              )}
+
               <span
                 className={`hidden sm:inline-block text-xs font-medium whitespace-nowrap ${
                   status === 'multiple-faces' || status === 'camera-error'
@@ -241,7 +280,7 @@ export const AppShell: React.FC<AppShellProps> = ({
               <button
                 type="button"
                 onClick={() => setLanguage(lang === 'en' ? 'hi' : 'en')}
-                className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 whitespace-nowrap shrink-0 cursor-pointer"
+                className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 whitespace-nowrap shrink-0 cursor-pointer"
                 aria-label="Switch language between English and Hindi"
               >
                 {lang === 'en' ? 'EN / हिंदी' : 'हिंदी / EN'}
@@ -252,7 +291,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsPaused(!isPaused)}
-                    className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                    className="px-3 py-2 text-xs font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
                     <span>{isPaused ? 'Resume Gaze' : 'Pause Gaze'}</span>
@@ -260,7 +299,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                   <button
                     type="button"
                     onClick={stopTracking}
-                    className="px-3 py-2 text-xs font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                    className="px-3 py-2 text-xs font-medium rounded-lg bg-slate-900 text-white dark:bg-slate-700 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <Square className="w-3.5 h-3.5" />
                     <span>Stop Camera</span>
@@ -270,7 +309,7 @@ export const AppShell: React.FC<AppShellProps> = ({
                 <button
                   type="button"
                   onClick={() => startTracking()}
-                  className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-teal-700 text-white hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+                  className="px-3.5 py-2 text-xs font-semibold rounded-lg bg-teal-700 text-white dark:bg-teal-600 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <Eye className="w-3.5 h-3.5" />
                   <span>Start Tracking</span>
@@ -303,6 +342,18 @@ export const AppShell: React.FC<AppShellProps> = ({
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => onNavigate('profile')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+                  currentRoute === 'profile'
+                    ? 'bg-slate-900 text-white dark:bg-teal-600'
+                    : 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span>{lang === 'hi' ? 'प्रोफ़ाइल' : 'Profile'}</span>
+              </button>
             </nav>
           )}
         </header>

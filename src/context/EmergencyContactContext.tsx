@@ -15,6 +15,7 @@ import {
   type ContactMutationResult,
   type ContactStorageMode,
 } from '../features/contacts/emergency-contact-service';
+import { ACTIVE_PATIENT_CHANGED_EVENT } from '../features/storage/patient-accounts';
 
 export interface EmergencyContactContextValue {
   contacts: EmergencyContact[];
@@ -72,9 +73,11 @@ export const EmergencyContactProvider: React.FC<{ children: React.ReactNode }> =
 
     window.addEventListener('storage', handleStorage);
     window.addEventListener(CONTACTS_CHANGED_EVENT, handleLocalResetOrChange);
+    window.addEventListener(ACTIVE_PATIENT_CHANGED_EVENT, handleLocalResetOrChange);
     return () => {
       window.removeEventListener('storage', handleStorage);
       window.removeEventListener(CONTACTS_CHANGED_EVENT, handleLocalResetOrChange);
+      window.removeEventListener(ACTIVE_PATIENT_CHANGED_EVENT, handleLocalResetOrChange);
     };
   }, [refreshContacts]);
 

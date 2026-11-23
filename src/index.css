@@ -67,3 +67,24 @@ html.gaze-pointer-active * {
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  aside,
+  header,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .print-only-card {
+    border: 1px solid #94a3b8 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
+

@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronDown, RotateCcw, ShieldCheck, Sliders, Trash2 } from 'lucide-react';
+import {
+  ChevronDown,
+  Download,
+  RotateCcw,
+  ShieldCheck,
+  Sliders,
+  Trash2,
+  User,
+} from 'lucide-react';
+import type { AppRoute } from '../components/layout/AppShell';
 import { useAppState } from '../context/AppStateContext';
+import { useLifeHub } from '../context/LifeHubContext';
 import { useEyeTracking } from '../hooks/useEyeTracking';
 import { queryCameraPermissionState } from '../features/eye-tracking/camera-manager';
 import { computePersonalizedBlinkThresholds } from '../features/eye-tracking/blink-detector';
@@ -9,8 +19,16 @@ import { DEFAULT_SETTINGS } from '../features/storage/local-storage';
 import { isSupabaseConfigured } from '../lib/supabase';
 import type { ButtonSize, InteractionMode, Language, ThemeMode } from '../types';
 
-export const SettingsPage: React.FC = () => {
+interface SettingsPageProps {
+  onNavigate?: (route: AppRoute) => void;
+}
+
+export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const {
+    activePatientId,
+    patientAccounts,
+    deleteActivePatientAccount,
+    profile,
     settings,
     updateSettings,
     setLanguage,
@@ -18,12 +36,14 @@ export const SettingsPage: React.FC = () => {
     clearCalibrationProfile,
     resetAllAppData,
   } = useAppState();
+  const { state, updateSmartHomeConfig, exportPatientDataJson } = useLifeHub();
   const { isRunning, startTracking, stopTracking } = useEyeTracking();
 
   const [camPerm, setCamPerm] = useState<string>('checking...');
   const [enVoices, setEnVoices] = useState<VoiceSummary[]>([]);
   const [hiVoices, setHiVoices] = useState<VoiceSummary[]>([]);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
@@ -49,6 +69,17 @@ export const SettingsPage: React.FC = () => {
     }));
   };
 
+  const handleDownloadExport = () => {
+    const json = exportPatientDataJson();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `nayansathi-${activePatientId}-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const blinkThresh = computePersonalizedBlinkThresholds(
     settings.eyeTracking.blinkOpenEar,
     settings.eyeTracking.blinkClosedEar
@@ -61,15 +92,41 @@ export const SettingsPage: React.FC = () => {
           Settings & Accessibility
         </h1>
         <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-          Configure eye-tracking dwell & normalized 1-Euro smoothing, personalized blink thresholds, visual contrast, bilingual speech output, and local privacy controls.
+          Configure profile identity, eye-tracking dwell & smoothing, bilingual speech preferences, health/room care defaults, caregiver permissions, and privacy controls.
         </p>
       </div>
 
-      {/* 1. Eye-Tracking Settings */}
+      {/* SECTION 1: My Profile */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-teal-700 text-white flex items-center justify-center">
+            <User className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              1. My Profile — {profile.preferredName || profile.name || 'Guest User'}
+            </h2>
+            <p className="text-xs text-slate-500">
+              Active profile ID: {activePatientId} · {patientAccounts.length} isolated profile(s) on this device
+            </p>
+          </div>
+        </div>
+        {onNavigate && (
+          <button
+            type="button"
+            onClick={() => onNavigate('profile')}
+            className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-teal-600 text-white text-sm font-semibold cursor-pointer"
+          >
+            Edit Profile, Photo & Switch User
+          </button>
+        )}
+      </section>
+
+      {/* SECTION 2: Eye Tracking & Accessibility */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-            Eye-Tracking, Blink & Cursor Smoothing
+            2. Eye Tracking & Accessibility
           </h2>
           <button
             type="button"
@@ -243,7 +300,7 @@ export const SettingsPage: React.FC = () => {
                 className="w-4 h-4 accent-teal-600"
               />
               <span className="font-medium">
-                Enable intentional long-blink selection ({settings.eyeTracking.longBlinkDurationMs} ms · edge-triggered once per closure)
+                Enable intentional long-blink selection ({settings.eyeTracking.longBlinkDurationMs} ms)
               </span>
             </label>
 
@@ -263,7 +320,7 @@ export const SettingsPage: React.FC = () => {
                 className="w-4 h-4 accent-teal-600"
               />
               <span className="font-medium">
-                Allow single-eye blink fallback when one eye has glasses glare or partial occlusion
+                Allow single-eye blink fallback when one eye has glare or occlusion
               </span>
             </label>
 
@@ -280,13 +337,12 @@ export const SettingsPage: React.FC = () => {
                 className="w-4 h-4 accent-teal-600"
               />
               <span className="font-medium">
-                Show predicted viewport coordinate debug overlay on cursor & preview
+                Show predicted viewport coordinate debug overlay
               </span>
             </label>
           </div>
         </div>
 
-        {/* Personalized Blink Baseline Summary */}
         <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="space-y-0.5">
             <span className="font-semibold text-slate-800 dark:text-slate-100 block">
@@ -295,159 +351,17 @@ export const SettingsPage: React.FC = () => {
             <span className="font-mono text-slate-600 dark:text-slate-300">
               Open: {settings.eyeTracking.blinkOpenEar.toFixed(3)} · Closed:{' '}
               {settings.eyeTracking.blinkClosedEar.toFixed(3)} · Close Threshold:{' '}
-              {blinkThresh.closeThreshold.toFixed(3)} · Reopen Threshold:{' '}
+              {blinkThresh.closeThreshold.toFixed(3)} · Reopen:{' '}
               {blinkThresh.openThreshold.toFixed(3)}
             </span>
           </div>
           <span className="text-slate-500 dark:text-slate-400">
-            Calibrate live in Patient Hub → Test C (Blink Test)
+            Calibrate live in Life Hub → Gaze Diagnostics → Blink Test
           </span>
         </div>
 
-        {/* Expandable Advanced Tracking Parameters */}
-        <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => setAdvancedOpen((prev) => !prev)}
-              aria-expanded={advancedOpen}
-              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
-            >
-              <Sliders className="w-4 h-4" />
-              <span>Advanced Tracking Parameters</span>
-              <ChevronDown
-                className={`w-4 h-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-              />
-            </button>
-
-            {advancedOpen && (
-              <button
-                type="button"
-                onClick={resetTrackingDefaults}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset Tracking Defaults</span>
-              </button>
-            )}
-          </div>
-
-          {advancedOpen && (
-            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-slate-800/80">
-              <label className="block space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="font-medium">1-Euro Derivative Cutoff (dCutoff)</span>
-                  <span className="font-mono tabular-nums">{settings.eyeTracking.dCutoff.toFixed(2)} Hz</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={3.0}
-                  step={0.1}
-                  value={settings.eyeTracking.dCutoff}
-                  onChange={(e) =>
-                    updateSettings((prev) => ({
-                      ...prev,
-                      eyeTracking: { ...prev.eyeTracking, dCutoff: Number(e.target.value) },
-                    }))
-                  }
-                  className="w-full accent-teal-600"
-                />
-                <span className="text-xs text-slate-500 block">
-                  Smooths velocity estimation used to adapt cutoff frequency during rapid eye movements.
-                </span>
-              </label>
-
-              <label className="block space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="font-medium">Hampel Outlier Threshold (MAD σ)</span>
-                  <span className="font-mono tabular-nums">{settings.eyeTracking.outlierThreshold.toFixed(1)} σ</span>
-                </div>
-                <input
-                  type="range"
-                  min={2.0}
-                  max={5.0}
-                  step={0.2}
-                  value={settings.eyeTracking.outlierThreshold}
-                  onChange={(e) =>
-                    updateSettings((prev) => ({
-                      ...prev,
-                      eyeTracking: { ...prev.eyeTracking, outlierThreshold: Number(e.target.value) },
-                    }))
-                  }
-                  className="w-full accent-teal-600"
-                />
-                <span className="text-xs text-slate-500 block">
-                  Lower values aggressively suppress 1-frame landmark spikes; 2-frame eye shifts still pass immediately.
-                </span>
-              </label>
-
-              <label className="block space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="font-medium">Target Hysteresis Margin</span>
-                  <span className="font-mono tabular-nums">{settings.eyeTracking.targetHysteresisPx} px</span>
-                </div>
-                <input
-                  type="range"
-                  min={4}
-                  max={32}
-                  step={2}
-                  value={settings.eyeTracking.targetHysteresisPx}
-                  onChange={(e) =>
-                    updateSettings((prev) => ({
-                      ...prev,
-                      eyeTracking: {
-                        ...prev.eyeTracking,
-                        targetHysteresisPx: Number(e.target.value),
-                        dwellTolerancePx: Number(e.target.value),
-                      },
-                    }))
-                  }
-                  className="w-full accent-teal-600"
-                />
-                <span className="text-xs text-slate-500 block">
-                  Extra exit buffer around focused keys (e.g., Q vs W) to prevent micro-jitter from dropping dwell.
-                </span>
-              </label>
-
-              <label className="block space-y-1.5 text-sm">
-                <div className="flex justify-between">
-                  <span className="font-medium">Tracking-Loss Hold Timeout</span>
-                  <span className="font-mono tabular-nums">{settings.eyeTracking.trackingLossTimeoutMs} ms</span>
-                </div>
-                <input
-                  type="range"
-                  min={200}
-                  max={1500}
-                  step={50}
-                  value={settings.eyeTracking.trackingLossTimeoutMs}
-                  onChange={(e) =>
-                    updateSettings((prev) => ({
-                      ...prev,
-                      eyeTracking: {
-                        ...prev.eyeTracking,
-                        trackingLossTimeoutMs: Number(e.target.value),
-                      },
-                    }))
-                  }
-                  className="w-full accent-teal-600"
-                />
-                <span className="text-xs text-slate-500 block">
-                  Duration to hold last reliable position during transient occlusion before hiding the cursor cleanly.
-                </span>
-              </label>
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* 2. Interface & Interaction Mode */}
-      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-          Interface & Accessibility
-        </h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+        {/* Visual Accessibility Controls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm pt-2 border-t border-slate-200 dark:border-slate-800">
           <label className="block space-y-1">
             <span className="font-medium">Interaction Mode</span>
             <select
@@ -538,12 +452,136 @@ export const SettingsPage: React.FC = () => {
           />
           <span>Enable High-Contrast Borders & Surfaces</span>
         </label>
+
+        {/* Expandable Advanced Tracking Parameters */}
+        <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((prev) => !prev)}
+              aria-expanded={advancedOpen}
+              className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-200 hover:text-teal-700 dark:hover:text-teal-400 cursor-pointer"
+            >
+              <Sliders className="w-4 h-4" />
+              <span>Advanced Tracking Parameters</span>
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {advancedOpen && (
+              <button
+                type="button"
+                onClick={resetTrackingDefaults}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset Tracking Defaults</span>
+              </button>
+            )}
+          </div>
+
+          {advancedOpen && (
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-slate-800/80">
+              <label className="block space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">1-Euro Derivative Cutoff (dCutoff)</span>
+                  <span className="font-mono tabular-nums">{settings.eyeTracking.dCutoff.toFixed(2)} Hz</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={3.0}
+                  step={0.1}
+                  value={settings.eyeTracking.dCutoff}
+                  onChange={(e) =>
+                    updateSettings((prev) => ({
+                      ...prev,
+                      eyeTracking: { ...prev.eyeTracking, dCutoff: Number(e.target.value) },
+                    }))
+                  }
+                  className="w-full accent-teal-600"
+                />
+              </label>
+
+              <label className="block space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">Hampel Outlier Threshold (MAD σ)</span>
+                  <span className="font-mono tabular-nums">{settings.eyeTracking.outlierThreshold.toFixed(1)} σ</span>
+                </div>
+                <input
+                  type="range"
+                  min={2.0}
+                  max={5.0}
+                  step={0.2}
+                  value={settings.eyeTracking.outlierThreshold}
+                  onChange={(e) =>
+                    updateSettings((prev) => ({
+                      ...prev,
+                      eyeTracking: { ...prev.eyeTracking, outlierThreshold: Number(e.target.value) },
+                    }))
+                  }
+                  className="w-full accent-teal-600"
+                />
+              </label>
+
+              <label className="block space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">Target Hysteresis Margin</span>
+                  <span className="font-mono tabular-nums">{settings.eyeTracking.targetHysteresisPx} px</span>
+                </div>
+                <input
+                  type="range"
+                  min={4}
+                  max={32}
+                  step={2}
+                  value={settings.eyeTracking.targetHysteresisPx}
+                  onChange={(e) =>
+                    updateSettings((prev) => ({
+                      ...prev,
+                      eyeTracking: {
+                        ...prev.eyeTracking,
+                        targetHysteresisPx: Number(e.target.value),
+                        dwellTolerancePx: Number(e.target.value),
+                      },
+                    }))
+                  }
+                  className="w-full accent-teal-600"
+                />
+              </label>
+
+              <label className="block space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="font-medium">Tracking-Loss Hold Timeout</span>
+                  <span className="font-mono tabular-nums">{settings.eyeTracking.trackingLossTimeoutMs} ms</span>
+                </div>
+                <input
+                  type="range"
+                  min={200}
+                  max={1500}
+                  step={50}
+                  value={settings.eyeTracking.trackingLossTimeoutMs}
+                  onChange={(e) =>
+                    updateSettings((prev) => ({
+                      ...prev,
+                      eyeTracking: {
+                        ...prev.eyeTracking,
+                        trackingLossTimeoutMs: Number(e.target.value),
+                      },
+                    }))
+                  }
+                  className="w-full accent-teal-600"
+                />
+              </label>
+            </div>
+          )}
+        </div>
       </section>
 
-      {/* 3. Communication & Speech Settings */}
+      {/* SECTION 3: Communication Preferences */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5">
         <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-          Language & Text-to-Speech
+          3. Communication Preferences
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
@@ -629,12 +667,106 @@ export const SettingsPage: React.FC = () => {
         </div>
       </section>
 
-      {/* 4. Privacy & Data Management */}
+      {/* SECTION 4: Health & Personal Care (Smart Home & Medical Card Defaults) */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+          4. Health & Personal Care
+        </h2>
+        <div className="space-y-2.5 text-sm">
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.privacy.medicalEmergencyCardConsent}
+              onChange={(e) =>
+                updateSettings((prev) => ({
+                  ...prev,
+                  privacy: { ...prev.privacy, medicalEmergencyCardConsent: e.target.checked },
+                }))
+              }
+              className="w-4 h-4 accent-teal-600"
+            />
+            <span>Consent to Emergency Medical Card printing</span>
+          </label>
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.privacy.shareWellbeingWithCaregivers}
+              onChange={(e) =>
+                updateSettings((prev) => ({
+                  ...prev,
+                  privacy: { ...prev.privacy, shareWellbeingWithCaregivers: e.target.checked },
+                }))
+              }
+              className="w-4 h-4 accent-teal-600"
+            />
+            <span>Allow sharing opted-in Wellbeing Journal entries with consented caregivers</span>
+          </label>
+        </div>
+
+        <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-2 text-sm">
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold">
+              Optional Home Assistant Endpoint URL (Requires server-side HOME_ASSISTANT_TOKEN)
+            </span>
+            <input
+              type="url"
+              placeholder="https://home.example.com"
+              value={state.smartHomeConfig.endpointUrl}
+              onChange={(e) =>
+                updateSmartHomeConfig({
+                  ...state.smartHomeConfig,
+                  endpointUrl: e.target.value,
+                })
+              }
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950"
+            />
+          </label>
+        </div>
+      </section>
+
+      {/* SECTION 5: Caregiver Permissions */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              5. Caregiver Permissions
+            </h2>
+            <p className="text-xs text-slate-500">
+              {state.caregivers.length} linked caregiver role(s) configured. Manage roles and shift handover access in Caregiver Portal.
+            </p>
+          </div>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('caregiver')}
+              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-semibold cursor-pointer"
+            >
+              Manage Caregivers & RBAC
+            </button>
+          )}
+        </div>
+        <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.privacy.shareHandoverWithCaregivers}
+            onChange={(e) =>
+              updateSettings((prev) => ({
+                ...prev,
+                privacy: { ...prev.privacy, shareHandoverWithCaregivers: e.target.checked },
+              }))
+            }
+            className="w-4 h-4 accent-teal-600"
+          />
+          <span>Allow consented caregivers to share Caregiver Handover Journal entries</span>
+        </label>
+      </section>
+
+      {/* SECTION 6: Privacy & Security */}
       <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-5 h-5 text-teal-700 dark:text-teal-400" />
           <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-            Privacy & Local Data Management
+            6. Privacy & Security
           </h2>
         </div>
 
@@ -657,7 +789,31 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
+        <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.privacy.historyConsentEnabled}
+            onChange={(e) =>
+              updateSettings((prev) => ({
+                ...prev,
+                privacy: { ...prev.privacy, historyConsentEnabled: e.target.checked },
+              }))
+            }
+            className="w-4 h-4 accent-teal-600"
+          />
+          <span>Enable opt-in local communication history logging (OFF by default)</span>
+        </label>
+
         <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={handleDownloadExport}
+            className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-teal-600 text-white text-sm font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export Profile Data (JSON)</span>
+          </button>
+
           <button
             type="button"
             disabled={!calibration}
@@ -666,6 +822,37 @@ export const SettingsPage: React.FC = () => {
           >
             Erase Saved Calibration
           </button>
+
+          {patientAccounts.length > 1 &&
+            (!confirmDeleteProfile ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteProfile(true)}
+                className="px-4 py-2 rounded-lg border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-sm font-semibold cursor-pointer"
+              >
+                Delete Current Profile
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void deleteActivePatientAccount();
+                    setConfirmDeleteProfile(false);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold cursor-pointer"
+                >
+                  Confirm Delete Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteProfile(false)}
+                  className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            ))}
 
           {!confirmReset ? (
             <button
