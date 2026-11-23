@@ -1,0 +1,985 @@
+# Build NayanSathi — GazeConnect
+## An AI-Powered Eye-Controlled Augmentative and Alternative Communication Platform
+
+**Tagline: Your Eyes. Your Voice. Your Freedom.**
+
+Act as a senior full-stack engineer, computer vision engineer, AI/ML architect, accessibility specialist and UI/UX designer.
+
+I want you to build a complete, production-minded web application from absolute scratch named **NayanSathi**, featuring **GazeConnect**.
+
+Assume that absolutely nothing has been built yet. There is no existing repository, codebase, UI, backend, database or eye-tracking implementation.
+
+Do not ask me to provide existing code. Start by creating the complete project and implement the application.
+
+---
+
+# 1. PRODUCT VISION
+
+NayanSathi is an AI-powered, browser-based Augmentative and Alternative Communication (AAC) platform designed for people who cannot communicate effectively through speech or conventional physical interaction.
+
+The application should allow users to control a computer interface using their eye movements through an ordinary webcam.
+
+The user should be able to:
+
+1. Move a cursor by looking at different areas of the screen.
+2. Calibrate the system to their individual eye movements.
+3. Select interface buttons using dwell-based selection.
+4. Construct sentences without typing or speaking.
+5. Communicate using text-to-speech.
+6. Access intelligent, context-aware sentence suggestions.
+7. Communicate in Hindi and English.
+8. Send emergency messages.
+9. Allow caregivers to personalize the communication experience.
+
+The platform must be accessible, intuitive, responsive, reliable and privacy-conscious.
+
+**Core principle:** A person should be able to communicate meaningful thoughts using only their eyes, without requiring a mouse, keyboard or touchscreen.
+
+# 2. TECHNOLOGY STACK
+
+Use the following architecture:
+
+### Frontend
+- Next.js 14 with App Router, TypeScript.
+- React components.
+- Tailwind CSS.
+- Lucide React icons.
+- Framer Motion for subtle animations.
+
+If the Google AI Studio environment does not support Next.js directly, use React + TypeScript + Vite while maintaining a modular, production-ready architecture.
+
+### Eye-tracking engine
+- MediaPipe Tasks Vision.
+- Face Landmarker.
+- Iris landmark extraction.
+- Eye aspect ratio calculation.
+- Head-pose estimation and compensation.
+- Gaze feature extraction.
+- Polynomial Ridge Regression.
+- 1-Euro Filter.
+- Browser webcam APIs.
+
+### AI
+- Gemini API for intelligent sentence completion.
+- Context-aware communication recommendations.
+- Personalized suggestions.
+- Deterministic offline fallback.
+
+### Backend
+- FastAPI with Python.
+- REST API architecture.
+- Proper request validation and error handling.
+
+### Database and authentication
+- Supabase.
+- PostgreSQL.
+- Supabase Authentication.
+
+### Speech
+- Web Speech API.
+- SpeechSynthesis for text-to-speech.
+- Hindi and English voice support.
+
+### Deployment
+- Frontend: Vercel.
+- Backend: compatible Python hosting.
+- Database: Supabase.
+
+Keep all external integrations configurable through environment variables.
+
+Do not expose secret API keys in frontend code.
+
+# 3. COMPLETE APPLICATION STRUCTURE
+
+Build the following pages and modules.
+
+## A. Landing Page
+
+Create a beautiful, premium, modern landing page.
+
+Hero section:
+
+- Product name: NayanSathi.
+- Product identity: GazeConnect.
+- Headline: "Your Eyes. Your Voice. Your Freedom."
+- Description explaining how people can communicate through eye movements.
+- Primary CTA: Start Communicating.
+- Secondary CTA: Explore How It Works.
+
+Include:
+
+1. Hero section with an interactive product preview.
+2. How it works section.
+3. Key features.
+4. Eye-tracking technology overview.
+5. Accessibility features.
+6. Patient and caregiver benefits.
+7. Privacy and security section.
+8. Footer.
+
+The design must communicate trust, accessibility, innovation and simplicity.
+
+## B. User Onboarding
+
+Create an onboarding flow.
+
+Step 1: Welcome.
+
+Step 2: Choose user language:
+- English.
+- हिंदी.
+
+Step 3: Choose interface preferences:
+- Standard buttons.
+- Large buttons.
+- Extra-large buttons.
+
+Step 4: Camera permission instructions.
+
+Step 5: Start eye-tracking setup.
+
+Allow users to skip optional onboarding steps.
+
+## C. Eye Tracking Dashboard
+
+This is the most important module.
+
+Build an actual real-time webcam-based eye-tracking system.
+
+It must NOT use randomly generated coordinates or simulated eye movements.
+
+### Webcam integration
+
+Implement:
+
+- Request webcam permission.
+- Display live webcam feed.
+- Initialize MediaPipe Face Landmarker.
+- Process video frames continuously.
+- Detect facial landmarks.
+- Extract iris landmarks for both eyes.
+- Identify eye corners and eyelid landmarks.
+- Calculate normalized iris positions.
+- Track head movement.
+- Handle camera failures.
+- Handle face-not-detected conditions.
+- Handle temporary tracking loss.
+
+Use the appropriate MediaPipe Face Landmarker model and its actual landmark topology.
+
+The system should work directly inside the browser.
+
+Video frames must be processed locally. Do not upload or store webcam footage.
+
+### Gaze feature extraction
+
+Extract useful features, including:
+
+- Left-eye iris position.
+- Right-eye iris position.
+- Normalized horizontal iris position.
+- Normalized vertical iris position.
+- Eye aspect ratio.
+- Eye openness.
+- Relative iris displacement.
+- Head-pose information.
+- Face tracking confidence.
+
+Normalize eye measurements relative to eye geometry so the system is less sensitive to different face sizes and camera positions.
+
+Use both eyes when possible.
+
+If one eye is temporarily unreliable, degrade gracefully using the available reliable data.
+
+### Gaze coordinate prediction
+
+Implement a real gaze prediction pipeline.
+
+Use Polynomial Ridge Regression to map extracted eye features into screen coordinates.
+
+Train independent X and Y regression models using collected calibration samples.
+
+Use polynomial feature expansion and regularization.
+
+Use sufficient feature normalization and numerical safeguards.
+
+Do not hardcode cursor positions.
+
+The prediction must be based on actual eye landmarks and personalized calibration data.
+
+### Head movement compensation
+
+A major requirement is reducing errors caused by head movement.
+
+Implement:
+
+- Facial landmark-based head-pose estimation.
+- Relative iris-to-eye geometry.
+- Head movement compensation features.
+- Face position normalization.
+- Tracking confidence checks.
+
+The system must distinguish actual gaze changes from changes caused by head movement as far as webcam-based tracking reasonably allows.
+
+### Cursor visualization
+
+Display a gaze cursor over the application.
+
+Requirements:
+
+- Smooth movement.
+- Minimal jitter.
+- Low latency.
+- Consistent screen-coordinate mapping.
+- Correct handling of browser viewport dimensions.
+- Correct handling of mirrored webcam preview.
+- Confidence-based cursor visibility.
+
+Implement a 1-Euro Filter with configurable minimum cutoff, beta and derivative cutoff.
+
+Adaptive smoothing should reduce jitter without creating excessive lag.
+
+Use sensible defaults and expose advanced settings.
+
+Add optional diagnostics showing:
+
+- Raw gaze coordinates.
+- Filtered gaze coordinates.
+- Tracking confidence.
+- Frames per second.
+- Current tracking status.
+
+Never display a falsely precise accuracy percentage.
+
+# 4. CALIBRATION SYSTEM
+
+Create a dedicated calibration experience.
+
+### Nine-point calibration
+
+Display nine targets:
+
+1. Top-left.
+2. Top-center.
+3. Top-right.
+4. Middle-left.
+5. Center.
+6. Middle-right.
+7. Bottom-left.
+8. Bottom-center.
+9. Bottom-right.
+
+Each point should appear individually.
+
+The user looks at the target and maintains their gaze while the application collects multiple valid samples.
+
+For each point:
+
+- Collect approximately 15–30 valid samples.
+- Reject low-confidence samples.
+- Ignore blinks.
+- Discard obvious outliers.
+- Average or robustly aggregate the remaining samples.
+- Store the corresponding target screen coordinates.
+
+Train the Polynomial Ridge Regression model after calibration.
+
+### Calibration quality
+
+After calibration:
+
+- Calculate a validation error using separate validation samples.
+- Display a qualitative calibration result.
+- Show which areas need recalibration.
+- Allow the user to recalibrate individual points or repeat the entire process.
+
+Persist calibration data locally for future sessions.
+
+Provide an option to erase it.
+
+Calibration must not finish successfully if insufficient valid samples have been collected.
+
+# 5. GAZE-BASED INTERACTION
+
+Implement reliable dwell-based selection.
+
+### Dwell selection
+
+When the gaze cursor remains within a selectable element:
+
+- Start a dwell timer.
+- Display a circular progress indicator.
+- Complete selection after the configured duration.
+- Reset the timer when gaze leaves the target.
+
+Default dwell time: 1000 ms.
+
+Allow users to configure dwell time between 500 ms and 3000 ms.
+
+Implement:
+
+- Dwell tolerance.
+- Target hysteresis.
+- Selection cooldown.
+- Tracking confidence threshold.
+- Protection against accidental repeated selection.
+
+### Blink detection
+
+Implement eye aspect ratio-based blink detection.
+
+However:
+
+- Natural blinking must not accidentally activate buttons.
+- Blinks should temporarily suspend gaze selection.
+- Support optional intentional long-blink selection.
+- Make blink activation configurable.
+
+### Alternative interaction modes
+
+Provide:
+
+- Gaze + dwell.
+- Keyboard navigation.
+- Mouse selection.
+- Switch-friendly interaction support.
+
+The application should never require gaze interaction to access essential settings or recovery controls.
+
+# 6. AAC COMMUNICATION INTERFACE
+
+Build a dedicated, distraction-free communication screen.
+
+This is the central user-facing feature.
+
+### Main interface
+
+The layout should contain:
+
+1. Current sentence display.
+2. Communication categories.
+3. Large selectable phrase buttons.
+4. Text-to-speech button.
+5. Delete and clear controls.
+6. Emergency access.
+7. Language switcher.
+
+### Phrase categories
+
+Create these categories:
+
+**Basic needs**
+- I need help.
+- I am hungry.
+- I am thirsty.
+- I need water.
+- I am tired.
+- I need rest.
+
+**Emotions**
+- I am happy.
+- I am sad.
+- I am uncomfortable.
+- I am scared.
+- I am in pain.
+
+**Medical**
+- I need a doctor.
+- I need medicine.
+- I am not feeling well.
+- Please call my caregiver.
+
+**Social**
+- Hello.
+- Thank you.
+- Please.
+- I love you.
+- I want to talk.
+
+**Daily activities**
+- I want to go outside.
+- I want to watch television.
+- I want to sleep.
+- I want to eat.
+
+Allow users and caregivers to create, edit and delete custom phrases.
+
+### Sentence builder
+
+Users should be able to build complete sentences by selecting phrases or individual words.
+
+Display selected text prominently.
+
+Provide:
+- Undo.
+- Delete last word.
+- Clear sentence.
+- Speak sentence.
+- Save frequently used phrases.
+
+### Virtual keyboard
+
+Build an eye-controlled virtual keyboard.
+
+Include:
+- Alphabet buttons.
+- Numbers.
+- Space.
+- Backspace.
+- Enter.
+- Clear.
+
+Make buttons sufficiently large and appropriately spaced.
+
+### Hindi and English
+
+Implement both languages.
+
+Phrase libraries, virtual keyboard, voice output and AI suggestions should respond to the selected language.
+
+# 7. TEXT-TO-SPEECH SYSTEM
+
+Use the browser Web Speech API.
+
+Implement:
+
+- English speech.
+- Hindi speech.
+- Play.
+- Pause.
+- Resume.
+- Stop.
+- Adjustable speech speed.
+- Voice selection when available.
+
+Use language-aware voice selection.
+
+Provide clear feedback when a particular voice is unavailable.
+
+# 8. GEMINI AI COMMUNICATION ASSISTANT
+
+Integrate Gemini for intelligent communication support.
+
+The user may select a few words or phrases, and the AI should suggest natural, complete sentences.
+
+Example:
+
+Selected words:
+"water", "please", "thirsty"
+
+Suggestions:
+- I am feeling thirsty. Please give me some water.
+- Could you please give me a glass of water?
+
+Implement:
+
+### Intelligent capabilities
+
+1. Context-aware sentence completion.
+2. Predictive phrase recommendations.
+3. Personalized phrase suggestions.
+4. Short sentence generation.
+5. Hindi and English support.
+6. Suggestions based on the user's selected words and phrases.
+
+### Important AI constraints
+
+- Never automatically send or speak an AI-generated sentence.
+- Users must explicitly select a suggestion.
+- Keep suggestions short and easy to understand.
+- Do not change the intended meaning of the user's selected words.
+- Never invent medical information, symptoms or intentions.
+- Never make communication depend on Gemini availability.
+
+### Offline fallback
+
+When Gemini is unavailable:
+
+- Use locally available predefined suggestions.
+- Use deterministic phrase completion.
+- Keep the AAC interface fully functional.
+
+The core communication functions must work without an internet connection once the application has loaded.
+
+Use a secure server-side API route or backend endpoint for Gemini calls. Never expose API credentials in client-side JavaScript.
+
+# 9. EMERGENCY COMMUNICATION
+
+Create a highly accessible emergency panel.
+
+Include large buttons:
+
+- I NEED HELP.
+- CALL MY CAREGIVER.
+- I AM IN PAIN.
+- I NEED MEDICAL HELP.
+- PLEASE CALL EMERGENCY SERVICES.
+
+Requirements:
+
+- Large, high-contrast controls.
+- Minimal navigation.
+- Configurable emergency contact information.
+- Optional emergency message generation.
+- Confirmation before sending any message.
+- Clear indication of whether a message was actually sent.
+
+Do not pretend to send SMS, WhatsApp messages or emergency calls unless an actual configured integration exists.
+
+Provide copyable emergency messages and appropriate browser-supported actions.
+
+# 10. PATIENT DASHBOARD
+
+Create a personalized patient dashboard.
+
+Include:
+
+- Profile.
+- Language settings.
+- Calibration status.
+- Eye-tracking preferences.
+- Favorite phrases.
+- Recently used phrases.
+- Communication preferences.
+- Accessibility customization.
+
+Show useful session information without turning communication into a complicated analytics dashboard.
+
+# 11. CAREGIVER DASHBOARD
+
+Create a separate caregiver interface.
+
+Features:
+
+- Patient profile management.
+- Custom phrase management.
+- Phrase category management.
+- Emergency contact configuration.
+- Dwell-time configuration.
+- Button-size configuration.
+- Language configuration.
+- Calibration assistance.
+- Accessibility settings.
+
+### Communication history
+
+Provide an optional communication history feature.
+
+Important privacy rule:
+
+Communication history must be OFF by default.
+
+Only save communication history with explicit consent.
+
+Allow users to:
+- Enable or disable history.
+- View saved history.
+- Delete individual entries.
+- Delete all history.
+
+Never silently record webcam footage, conversations or user activity.
+
+# 12. SETTINGS AND ACCESSIBILITY
+
+Build a complete settings page.
+
+Include:
+
+### Eye-tracking settings
+- Enable/disable tracking.
+- Dwell duration.
+- Cursor size.
+- Cursor visibility.
+- Cursor smoothing.
+- Confidence threshold.
+- Calibration management.
+
+### Interface settings
+- Button size.
+- Button spacing.
+- Font size.
+- High contrast.
+- Light mode.
+- Dark mode.
+
+### Communication settings
+- Preferred language.
+- Speech speed.
+- Preferred voice.
+- Favorite phrases.
+
+### Privacy
+- Camera permission status.
+- Local data management.
+- Calibration data deletion.
+- Communication history consent.
+- Clear all locally stored application data.
+
+Make the application usable for people with different motor abilities and visual preferences.
+
+# 13. UI/UX DESIGN DIRECTION
+
+Build an exceptionally polished, premium, modern accessibility-focused interface.
+
+The website should look like a real, carefully designed assistive technology product.
+
+### Design language
+
+- Minimal.
+- Clean.
+- Modern.
+- Calm.
+- Trustworthy.
+- Accessible.
+- Professional.
+
+Use a sophisticated color system with:
+- Deep navy or slate.
+- Soft backgrounds.
+- Blue or teal accent colors.
+- High-contrast text.
+- Clear interaction states.
+
+Avoid excessive gradients, unnecessary animations, visual clutter and overly decorative elements.
+
+Use:
+- Consistent spacing.
+- Rounded interface elements.
+- Clear typography.
+- Large buttons.
+- Proper visual hierarchy.
+- Responsive layouts.
+- Subtle Framer Motion transitions.
+
+### Critical accessibility rules
+
+The communication interface must prioritize usability over visual decoration.
+
+- Large clickable areas.
+- Sufficient spacing between gaze targets.
+- High contrast.
+- Clear selected states.
+- Visible dwell progress.
+- No tiny controls.
+- No interaction depending exclusively on hover.
+- Keyboard accessibility.
+- Screen-reader-friendly labels.
+
+Design separately for the landing page, dashboard, calibration interface and communication screen.
+
+Do not make the communication interface look like a typical administrative dashboard.
+
+# 14. APPLICATION ARCHITECTURE
+
+Organize the code into modular components.
+
+Suggested frontend structure:
+
+src/
+  app/
+    page.tsx
+    onboarding/
+    dashboard/
+    calibration/
+    communicate/
+    caregiver/
+    settings/
+  components/
+    layout/
+    ui/
+    accessibility/
+    gaze/
+    communication/
+    dashboard/
+  features/
+    eye-tracking/
+      camera-manager.ts
+      face-landmarker.ts
+      iris-extractor.ts
+      gaze-features.ts
+      gaze-regression.ts
+      calibration.ts
+      head-pose.ts
+      one-euro-filter.ts
+      dwell-manager.ts
+      blink-detector.ts
+    communication/
+      phrase-library.ts
+      sentence-builder.ts
+      virtual-keyboard.ts
+      text-to-speech.ts
+    ai/
+      gemini-client.ts
+      suggestion-engine.ts
+      offline-fallback.ts
+    storage/
+      local-storage.ts
+  hooks/
+  types/
+  lib/
+
+Use appropriate equivalent organization if the environment requires Vite.
+
+Create a separate backend structure:
+
+backend/
+  app/
+    main.py
+    api/
+    services/
+    models/
+    schemas/
+    core/
+
+Use clear separation between UI, application logic, computer vision and AI functionality.
+
+Do not put all application logic inside one large component.
+
+# 15. DATABASE DESIGN
+
+Prepare Supabase/PostgreSQL schemas for:
+
+- Users.
+- Patient profiles.
+- Caregiver relationships.
+- Custom phrases.
+- Phrase categories.
+- User preferences.
+- Calibration profiles.
+- Communication history.
+
+Implement appropriate access controls and Row Level Security policies.
+
+A caregiver must not automatically gain access to a patient's private information.
+
+Use explicit consent and appropriate authorization.
+
+The application must also work in local demo mode without requiring Supabase credentials.
+
+# 16. ROBUSTNESS AND ERROR HANDLING
+
+Implement meaningful handling for:
+
+- Camera permission denied.
+- Camera unavailable.
+- Multiple detected faces.
+- Face temporarily missing.
+- Low-confidence landmarks.
+- Poor lighting.
+- Eye landmarks unavailable.
+- Invalid calibration.
+- Browser compatibility limitations.
+- Gemini API failures.
+- Backend unavailable.
+- Supabase unavailable.
+- Missing speech voices.
+
+Show useful messages and recovery actions.
+
+Never crash the whole application because one optional service is unavailable.
+
+# 17. PERFORMANCE REQUIREMENTS
+
+Optimize the eye-tracking engine for real-time browser operation.
+
+- Process webcam frames efficiently.
+- Avoid unnecessary React re-renders.
+- Use requestAnimationFrame appropriately.
+- Keep computer vision processing separate from UI rendering.
+- Avoid blocking the main thread unnecessarily.
+- Manage webcam streams correctly.
+- Release camera resources when tracking stops.
+- Handle component unmounting.
+- Prevent memory leaks.
+- Maintain responsive behavior on ordinary laptops.
+
+Aim for smooth tracking, but do not fake performance metrics.
+
+# 18. TESTING AND VALIDATION
+
+Create tests for the important application logic.
+
+Test:
+
+- Polynomial regression.
+- Coordinate mapping.
+- Feature normalization.
+- Calibration sample filtering.
+- 1-Euro Filter.
+- Dwell detection.
+- Blink detection.
+- Sentence construction.
+- Offline AI fallback.
+- Local persistence.
+
+Provide a diagnostic screen to verify the complete gaze pipeline.
+
+Do not claim that webcam gaze tracking achieves clinical-grade precision.
+
+Clearly communicate that performance depends on the webcam, lighting, distance, user characteristics, positioning and calibration.
+
+# 19. IMPLEMENTATION PRIORITIES
+
+Build the actual application in this order:
+
+**Priority 1 — Functional foundation**
+- Project initialization.
+- Main layout.
+- Landing page.
+- Routing.
+- Shared UI components.
+
+**Priority 2 — Actual eye-tracking engine**
+- Webcam access.
+- MediaPipe.
+- Landmark extraction.
+- Gaze feature extraction.
+- Calibration.
+- Ridge Regression.
+- Head-pose compensation.
+- 1-Euro Filter.
+- Cursor rendering.
+
+**Priority 3 — Actual interaction**
+- Dwell selection.
+- Blink handling.
+- Virtual keyboard.
+- Accessibility settings.
+
+**Priority 4 — AAC**
+- Phrase categories.
+- Sentence builder.
+- Hindi and English.
+- Text-to-speech.
+
+**Priority 5 — AI**
+- Gemini integration.
+- Context-aware suggestions.
+- Offline fallback.
+
+**Priority 6 — Ecosystem**
+- Patient dashboard.
+- Caregiver dashboard.
+- Supabase integration.
+- Consent-based communication history.
+
+Do not spend most of the implementation effort on the landing page while leaving the eye-tracking engine as a placeholder.
+
+# 20. IMPORTANT DEVELOPMENT RULES
+
+These instructions are mandatory:
+
+1. Build everything from scratch.
+2. Generate real working code, not just a design mockup.
+3. Never use fake gaze coordinates or randomly moving cursors.
+4. Never simulate successful calibration.
+5. Implement actual webcam-based tracking using MediaPipe.
+6. Make the regression model depend on collected calibration samples.
+7. Make dwell selection operational.
+8. Connect the communication buttons to actual sentence-building logic.
+9. Make text-to-speech functional.
+10. Implement Gemini integration with a secure API boundary.
+11. Ensure offline fallback functionality.
+12. Handle missing environment variables gracefully.
+13. Use TypeScript types and modular components.
+14. Avoid unnecessary dependencies.
+15. Do not leave critical features as TODO comments.
+16. Do not generate non-functional buttons.
+17. Do not expose API keys.
+18. Do not invent accuracy numbers or claim medical validation.
+
+When a service requires credentials, implement its complete integration interface and provide a clear setup guide with the necessary environment variable names.
+
+For functionality that cannot run without external credentials, provide a working local fallback rather than breaking the application.
+
+# 21. FINAL DELIVERABLE
+
+Create a complete, runnable NayanSathi application.
+
+I expect:
+
+- Full source code.
+- Complete frontend.
+- Functional browser-based gaze tracking.
+- Complete calibration system.
+- Working gaze cursor.
+- Dwell-based selection.
+- AAC communication interface.
+- Virtual keyboard.
+- Hindi and English support.
+- Text-to-speech.
+- Gemini-powered communication assistant.
+- Offline fallback.
+- Emergency panel.
+- Patient dashboard.
+- Caregiver dashboard.
+- Accessibility settings.
+- Backend architecture.
+- Database schema.
+- Environment variable example.
+- README with setup and deployment instructions.
+
+Provide a clear explanation of:
+- How to run the application.
+- How to enable the webcam.
+- How to complete calibration.
+- How to test gaze tracking.
+- How to configure Gemini.
+- How to configure Supabase.
+- How to deploy the project.
+
+# 22. FINAL ACCEPTANCE CRITERIA
+
+Before declaring the application complete, verify the following:
+
+[ ] The website starts successfully.
+
+[ ] The landing page and all main application pages work.
+
+[ ] The webcam can be accessed with permission.
+
+[ ] MediaPipe detects facial and iris landmarks.
+
+[ ] Actual eye features are extracted.
+
+[ ] Calibration collects real samples.
+
+[ ] Polynomial Ridge Regression predicts gaze coordinates.
+
+[ ] Cursor movement responds to actual gaze changes.
+
+[ ] The 1-Euro Filter reduces cursor jitter.
+
+[ ] Dwell progress and selection work.
+
+[ ] Blinks do not cause accidental selections.
+
+[ ] AAC buttons add phrases to the sentence.
+
+[ ] The virtual keyboard works.
+
+[ ] Hindi and English modes work.
+
+[ ] Text-to-speech works when supported voices are available.
+
+[ ] Gemini suggestions work when configured.
+
+[ ] Offline suggestions work without Gemini.
+
+[ ] Emergency messages can be prepared and copied.
+
+[ ] Settings and local preferences persist.
+
+[ ] Camera resources are released when tracking stops.
+
+[ ] Missing external credentials do not crash the application.
+
+[ ] No critical feature is merely a visual placeholder.
+
+**ULTIMATE OBJECTIVE:**
+
+Build NayanSathi as a genuinely usable assistive communication platform, not just a beautiful website.
+
+The most important differentiator is a personalized, stable, webcam-based eye-control system that enables a person to navigate an AAC interface and communicate meaningful sentences using their eyes.
+
+Start creating the complete application now. Initialize the project, implement the files, run the application, resolve build errors and verify the essential functionality before presenting the result.
