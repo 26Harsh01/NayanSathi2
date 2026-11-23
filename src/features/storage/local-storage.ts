@@ -16,8 +16,10 @@ import {
   DEFAULT_LOCAL_PATIENT_ID,
   getActivePatientId,
   getPatientScopedStorageKey,
+  setActivePatientId,
 } from './patient-accounts';
 import { eraseGamesState, eraseMusicState } from './games-music-storage';
+import { eraseHubPreferences } from './hub-preferences-storage';
 import { deleteAllAudioForPatient } from './indexeddb-audio';
 
 const KEYS = {
@@ -305,11 +307,16 @@ export function clearPatientStorageKeys(patientId: string): void {
   }
   eraseGamesState(patientId);
   eraseMusicState(patientId);
+  eraseHubPreferences(patientId);
   void deleteAllAudioForPatient(patientId);
   if (typeof window.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
     window.dispatchEvent(new CustomEvent(CONTACTS_CHANGED_EVENT));
   }
 }
+
+export const DEFAULT_USER_ID = DEFAULT_LOCAL_PATIENT_ID;
+export const setActiveScopePatientId = setActivePatientId;
+export const clearScopedUserLocalData = clearPatientStorageKeys;
 
 export function clearAllLocalData(): void {
   clearPatientStorageKeys(getActivePatientId());

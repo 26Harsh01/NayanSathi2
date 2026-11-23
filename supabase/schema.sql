@@ -552,3 +552,124 @@ create policy "Patients manage own music playlists" on public.music_playlists
   for all using (patient_id = auth.uid()) with check (patient_id = auth.uid());
 create policy "Patients manage own music preferences" on public.music_preferences
   for all using (patient_id = auth.uid()) with check (patient_id = auth.uid());
+
+-- 19. Emergency SOS System (Extended Contacts, Alerts, Notification Logs, Settings)
+alter table public.emergency_contacts
+  add column if not exists whatsapp_number text not null default '',
+  add column if not exists whatsapp_opt_in boolean not null default false,
+  add column if not exists preferred_channel text not null check (preferred_channel in ('whatsapp', 'sms', 'whatsapp_then_sms', 'sms_then_whatsapp', 'call_only')) default 'whatsapp_then_sms',
+  add column if not exists role text not null check (role in ('primary_caregiver', 'secondary_caregiver', 'family_member', 'emergency_support')) default 'primary_caregiver',
+  add column if not exists is_active boolean not null default true,
+  add column if not exists consent_status text not null check (consent_status in ('granted', 'pending', 'revoked')) default 'pending',
+  add column if not exists verification_status text not null check (verification_status in ('verified', 'unverified', 'pending')) default 'unverified';
+
+create table if not exists public.emergency_settings (
+  patient_id uuid primary key references public.users(id) on delete cascade,
+  whatsapp_enabled boolean not null default true,
+  sms_enabled boolean not null default true,
+  notification_priority text not null check (notification_priority in ('whatsapp_first', 'sms_first', 'parallel')) default 'whatsapp_first',
+  location_sharing_enabled boolean not null default false,
+  escalation_enabled boolean not null default true,
+  escalation_interval int not null default 120 check (escalation_interval between 30 and 900),
+  confirmation_mode text not null check (confirmation_mode in ('two_step', 'single_step')) default 'two_step',
+  custom_message_en text not null default '',
+  custom_message_hi text not null default '',
+  sms_dlt_template_id text not null default '',
+  sms_dlt_entity_id text not null default '',
+  test_simulation_mode boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.emergency_alerts (
+  id uuid primary key default gen_random_uuid(),
+  patient_id uuid not null references public.users(id) on delete cascade,
+  patient_name text not null default '',
+  created_at timestamptz not null default now(),
+  alert_type text not null check (alert_type in ('sos', 'test')) default 'sos',
+  message_text text not null default '',
+  latitude double precision,
+  longitude double precision,
+  location_shared boolean not null default false,
+  location_status text not null check (location_status in ('shared', 'unavailable', 'denied', 'disabled')) default 'unavailable',
+  map_link text not null default '',
+  current_status text not null check (current_status in (
+    'alert_created',
+    'notification_sending',
+    'notification_submitted',
+    'delivered',
+    'failed',
+    'caregiver_acknowledged',
+    'assistance_in_progress',
+    'resolved'
+  )) default 'alert_created',
+  acknowledged_by text,
+  acknowledged_at timestamptz,
+  resolved_by text,
+  resolved_at timestamptz,
+  escalation_stage int not null default 0,
+  next_escalation_at timestamptz,
+  idempotency_key text not null,
+  unique (patient_id, idempotency_key)
+);
+
+create index if not exists emergency_alerts_patient_created_idx
+  on public.emergency_alerts (patient_id, created_at desc);
+
+create table if not exists public.emergency_notification_logs (
+  id uuid primary key default gen_random_uuid(),
+  alert_id uuid not null references public.emergency_alerts(id) on delete cascade,
+  patient_id uuid not null references public.users(id) on delete cascade,
+  recipient_id text not null,
+  recipient_name text not null default '',
+  recipient_role text not null default '',
+  channel text not null check (channel in ('whatsapp', 'sms')),
+  destination text not null default '',
+  provider text not null,
+  provider_message_id text,
+  attempt_number int not null default 1 check (attempt_number >= 1),
+  delivery_status text not null check (delivery_status in (
+    'queued',
+    'submitted',
+    'sent',
+    'delivered',
+    'read',
+    'failed',
+    'skipped_unconfigured',
+    'simulated'
+  )) default 'queued',
+  failure_reason text,
+  is_simulated boolean not null default false,
+  sent_at timestamptz not null default now(),
+  delivered_at timestamptz
+);
+
+create index if not exists emergency_logs_alert_idx
+  on public.emergency_notification_logs (alert_id, sent_at asc);
+
+create index if not exists emergency_logs_provider_msg_idx
+  on public.emergency_notification_logs (provider_message_id)
+  where provider_message_id is not null;
+
+alter table public.emergency_settings enable row level security;
+alter table public.emergency_alerts enable row level security;
+alter table public.emergency_notification_logs enable row level security;
+
+create policy "Patients manage own emergency settings" on public.emergency_settings
+  for all using (patient_id = auth.uid()) with check (patient_id = auth.uid());
+create policy "Consented caregivers manage patient emergency settings" on public.emergency_settings
+  for all using (public.is_consented_caregiver(patient_id, true, false))
+  with check (public.is_consented_caregiver(patient_id, true, false));
+
+create policy "Patients manage own emergency alerts" on public.emergency_alerts
+  for all using (patient_id = auth.uid()) with check (patient_id = auth.uid());
+create policy "Consented caregivers view and respond to emergency alerts" on public.emergency_alerts
+  for select using (public.is_consented_caregiver(patient_id));
+create policy "Consented caregivers update emergency alerts" on public.emergency_alerts
+  for update using (public.has_caregiver_permission(patient_id, 'manage_requests'))
+  with check (public.has_caregiver_permission(patient_id, 'manage_requests'));
+
+create policy "Patients view own emergency notification logs" on public.emergency_notification_logs
+  for select using (patient_id = auth.uid());
+create policy "Consented caregivers view emergency notification logs" on public.emergency_notification_logs
+  for select using (public.is_consented_caregiver(patient_id));
+

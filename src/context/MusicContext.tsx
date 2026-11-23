@@ -20,6 +20,11 @@ import {
   savePatientImage,
 } from '../features/storage/indexeddb-media';
 import {
+  AMBIENT_SOUNDSCAPES,
+  ambientSoundEngine,
+  type AmbientSoundId,
+} from '../features/music/ambient-synth';
+import {
   loadMusicState,
   saveMusicState,
 } from '../features/storage/games-music-storage';
@@ -52,8 +57,13 @@ interface MusicContextValue {
   volume: number;
   isMuted: boolean;
   playbackError: string | null;
+  activeAmbientId: AmbientSoundId | null;
+  isAmbientPlaying: boolean;
   clearPlaybackError: () => void;
   playTrack: (trackId: string, queueIds?: string[]) => Promise<void>;
+  playAmbientSound: (id: AmbientSoundId) => void;
+  toggleAmbientPlayPause: () => void;
+  stopAmbientSound: () => void;
   togglePlayPause: () => Promise<void>;
   pausePlayback: () => void;
   nextTrack: () => Promise<void>;
@@ -95,6 +105,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
   const [isMuted, setIsMuted] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [activeAmbientId, setActiveAmbientId] = useState<AmbientSoundId | null>(null);
+  const [isAmbientPlaying, setIsAmbientPlaying] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentObjectUrlRef = useRef<string | null>(null);
@@ -131,12 +143,15 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       audio.removeAttribute('src');
       audio.load();
     }
+    ambientSoundEngine.stop();
     revokeObjectUrl();
     const loaded = loadMusicState(activePatientId);
     setMusicState(loaded);
     setCurrentTrackId(null);
     setQueueTrackIds([]);
     setIsPlaying(false);
+    setActiveAmbientId(null);
+    setIsAmbientPlaying(false);
     setCurrentTimeSec(0);
     setDurationSec(0);
     setVolumeState(loaded.preferences.defaultVolume);
@@ -302,6 +317,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return () => {
       audio.pause();
+      ambientSoundEngine.stop();
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('play', onPlay);
@@ -314,10 +330,52 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [loadAndPlayTrackInternal, pickAdjacentTrack, revokeObjectUrl]);
 
   useEffect(() => {
+    const effective = isMuted ? 0 : Math.max(0, Math.min(1, volume));
     if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : Math.max(0, Math.min(1, volume));
+      audioRef.current.volume = effective;
     }
+    ambientSoundEngine.setVolume(effective);
   }, [volume, isMuted]);
+
+  const stopAmbientSound = useCallback(() => {
+    ambientSoundEngine.stop();
+    setActiveAmbientId(null);
+    setIsAmbientPlaying(false);
+  }, []);
+
+  const playAmbientSound = useCallback(
+    (id: AmbientSoundId) => {
+      // Pause track playback before starting ambient soundscape
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      }
+      const effectiveVol = isMuted ? 0 : volume;
+      const res = ambientSoundEngine.start(id, effectiveVol);
+      if (!res.ok) {
+        setPlaybackError(res.error || 'Could not start relaxing audio.');
+        return;
+      }
+      setPlaybackError(null);
+      setActiveAmbientId(id);
+      setIsAmbientPlaying(true);
+    },
+    [isMuted, volume]
+  );
+
+  const toggleAmbientPlayPause = useCallback(() => {
+    if (!activeAmbientId) {
+      playAmbientSound(AMBIENT_SOUNDSCAPES[0].id);
+      return;
+    }
+    if (isAmbientPlaying) {
+      ambientSoundEngine.stop();
+      setIsAmbientPlaying(false);
+    } else {
+      const res = ambientSoundEngine.start(activeAmbientId, isMuted ? 0 : volume);
+      if (res.ok) setIsAmbientPlaying(true);
+    }
+  }, [activeAmbientId, isAmbientPlaying, isMuted, playAmbientSound, volume]);
 
   const playTrack = useCallback(
     async (trackId: string, queueIds?: string[]) => {
@@ -326,6 +384,9 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setPlaybackError('Selected track could not be found.');
         return;
       }
+      ambientSoundEngine.stop();
+      setActiveAmbientId(null);
+      setIsAmbientPlaying(false);
       if (queueIds && queueIds.length > 0) {
         setQueueTrackIds(queueIds);
       } else if (queueRef.current.length === 0) {
@@ -668,8 +729,13 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       volume,
       isMuted,
       playbackError,
+      activeAmbientId,
+      isAmbientPlaying,
       clearPlaybackError: () => setPlaybackError(null),
       playTrack,
+      playAmbientSound,
+      toggleAmbientPlayPause,
+      stopAmbientSound,
       togglePlayPause,
       pausePlayback,
       nextTrack,
@@ -692,6 +758,7 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       clearRecentlyPlayed,
     }),
     [
+      activeAmbientId,
       addTrackToPlaylist,
       clearRecentlyPlayed,
       createPlaylist,
@@ -700,12 +767,14 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       cycleRepeatMode,
       deletePlaylist,
       durationSec,
+      isAmbientPlaying,
       isLoadingTrack,
       isMuted,
       isPlaying,
       musicState,
       nextTrack,
       pausePlayback,
+      playAmbientSound,
       playbackError,
       playTrack,
       previousTrack,
@@ -716,6 +785,8 @@ export const MusicProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       seekBy,
       seekTo,
       setVolume,
+      stopAmbientSound,
+      toggleAmbientPlayPause,
       toggleFavouriteTrack,
       toggleMute,
       togglePlayPause,

@@ -30,7 +30,9 @@ export interface ContactMutationResult {
   contact?: EmergencyContact;
   mode: ContactStorageMode;
   error?: string;
-  fieldErrors?: Partial<Record<'name' | 'relationship' | 'phone' | 'email', string>>;
+  fieldErrors?: Partial<
+    Record<'name' | 'relationship' | 'phone' | 'whatsappNumber' | 'email', string>
+  >;
 }
 
 interface RawLegacyContact {
@@ -39,8 +41,15 @@ interface RawLegacyContact {
   relation?: unknown;
   relationship?: unknown;
   phone?: unknown;
+  whatsappNumber?: unknown;
+  whatsappOptIn?: unknown;
   email?: unknown;
+  preferredChannel?: unknown;
+  role?: unknown;
   isPrimary?: unknown;
+  isActive?: unknown;
+  consentStatus?: unknown;
+  verificationStatus?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -51,8 +60,15 @@ interface SupabaseContactRow {
   name: string;
   relationship: string;
   phone: string;
+  whatsapp_number?: string;
+  whatsapp_opt_in?: boolean;
   email: string;
+  preferred_channel?: EmergencyContact['preferredChannel'];
+  role?: EmergencyContact['role'];
   is_primary: boolean;
+  is_active?: boolean;
+  consent_status?: EmergencyContact['consentStatus'];
+  verification_status?: EmergencyContact['verificationStatus'];
   created_at: string;
   updated_at: string;
 }
@@ -95,13 +111,49 @@ function sanitizeStoredRecord(raw: unknown): EmergencyContact | null {
   const updatedAt =
     typeof item.updatedAt === 'string' && item.updatedAt.trim() ? item.updatedAt : createdAt;
 
+  const whatsappNumber =
+    typeof item.whatsappNumber === 'string' ? normalizePhoneNumber(item.whatsappNumber) : '';
+  const whatsappOptIn = Boolean(item.whatsappOptIn && whatsappNumber);
+  const preferredChannel: EmergencyContact['preferredChannel'] =
+    item.preferredChannel === 'whatsapp' ||
+    item.preferredChannel === 'sms' ||
+    item.preferredChannel === 'whatsapp_then_sms' ||
+    item.preferredChannel === 'sms_then_whatsapp' ||
+    item.preferredChannel === 'call_only'
+      ? item.preferredChannel
+      : 'whatsapp_then_sms';
+  const role: EmergencyContact['role'] =
+    item.role === 'primary_caregiver' ||
+    item.role === 'secondary_caregiver' ||
+    item.role === 'family_member' ||
+    item.role === 'emergency_support'
+      ? item.role
+      : item.isPrimary
+        ? 'primary_caregiver'
+        : 'family_member';
+  const consentStatus: EmergencyContact['consentStatus'] =
+    item.consentStatus === 'granted' || item.consentStatus === 'revoked'
+      ? item.consentStatus
+      : 'pending';
+  const verificationStatus: EmergencyContact['verificationStatus'] =
+    item.verificationStatus === 'verified' || item.verificationStatus === 'pending'
+      ? item.verificationStatus
+      : 'unverified';
+
   return {
     id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : generateContactId(),
     name,
     relationship,
     phone,
+    whatsappNumber,
+    whatsappOptIn,
     email,
+    preferredChannel,
+    role,
     isPrimary: Boolean(item.isPrimary),
+    isActive: item.isActive !== false,
+    consentStatus,
+    verificationStatus,
     createdAt,
     updatedAt,
   };
@@ -345,8 +397,15 @@ function mapSupabaseRow(row: SupabaseContactRow): EmergencyContact {
     name: row.name,
     relationship: row.relationship,
     phone: normalizePhoneNumber(row.phone),
+    whatsappNumber: row.whatsapp_number ? normalizePhoneNumber(row.whatsapp_number) : '',
+    whatsappOptIn: Boolean(row.whatsapp_opt_in),
     email: row.email || '',
+    preferredChannel: row.preferred_channel || 'whatsapp_then_sms',
+    role: row.role || (row.is_primary ? 'primary_caregiver' : 'family_member'),
     isPrimary: Boolean(row.is_primary),
+    isActive: row.is_active !== false,
+    consentStatus: row.consent_status || 'pending',
+    verificationStatus: row.verification_status || 'unverified',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -362,7 +421,9 @@ export async function loadEmergencyContactsService(): Promise<ContactLoadResult>
     try {
       const { data, error } = await ctx.client
         .from('emergency_contacts')
-        .select('id, patient_id, name, relationship, phone, email, is_primary, created_at, updated_at')
+        .select(
+          'id, patient_id, name, relationship, phone, whatsapp_number, whatsapp_opt_in, email, preferred_channel, role, is_primary, is_active, consent_status, verification_status, created_at, updated_at'
+        )
         .eq('patient_id', ctx.patientId)
         .order('is_primary', { ascending: false })
         .order('created_at', { ascending: true });
@@ -454,12 +515,21 @@ export async function addEmergencyContactService(
           name: validation.normalized.name,
           relationship: validation.normalized.relationship,
           phone: validation.normalized.phone,
+          whatsapp_number: validation.normalized.whatsappNumber,
+          whatsapp_opt_in: validation.normalized.whatsappOptIn,
           email: validation.normalized.email,
+          preferred_channel: validation.normalized.preferredChannel,
+          role: validation.normalized.role,
           is_primary: shouldBePrimary,
+          is_active: validation.normalized.isActive,
+          consent_status: validation.normalized.consentStatus,
+          verification_status: validation.normalized.verificationStatus,
           created_at: nowIso,
           updated_at: nowIso,
         })
-        .select('id, patient_id, name, relationship, phone, email, is_primary, created_at, updated_at')
+        .select(
+          'id, patient_id, name, relationship, phone, whatsapp_number, whatsapp_opt_in, email, preferred_channel, role, is_primary, is_active, consent_status, verification_status, created_at, updated_at'
+        )
         .single();
 
       if (error || !data) {
@@ -492,8 +562,15 @@ export async function addEmergencyContactService(
     name: validation.normalized.name,
     relationship: validation.normalized.relationship,
     phone: validation.normalized.phone,
+    whatsappNumber: validation.normalized.whatsappNumber,
+    whatsappOptIn: validation.normalized.whatsappOptIn,
     email: validation.normalized.email,
+    preferredChannel: validation.normalized.preferredChannel,
+    role: validation.normalized.role,
     isPrimary: shouldBePrimary,
+    isActive: validation.normalized.isActive,
+    consentStatus: validation.normalized.consentStatus,
+    verificationStatus: validation.normalized.verificationStatus,
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -591,13 +668,22 @@ export async function updateEmergencyContactService(
           name: validation.normalized.name,
           relationship: validation.normalized.relationship,
           phone: validation.normalized.phone,
+          whatsapp_number: validation.normalized.whatsappNumber,
+          whatsapp_opt_in: validation.normalized.whatsappOptIn,
           email: validation.normalized.email,
+          preferred_channel: validation.normalized.preferredChannel,
+          role: validation.normalized.role,
           is_primary: shouldBePrimary,
+          is_active: validation.normalized.isActive,
+          consent_status: validation.normalized.consentStatus,
+          verification_status: validation.normalized.verificationStatus,
           updated_at: nowIso,
         })
         .eq('id', id)
         .eq('patient_id', ctx.patientId)
-        .select('id, patient_id, name, relationship, phone, email, is_primary, created_at, updated_at')
+        .select(
+          'id, patient_id, name, relationship, phone, whatsapp_number, whatsapp_opt_in, email, preferred_channel, role, is_primary, is_active, consent_status, verification_status, created_at, updated_at'
+        )
         .single();
 
       if (error || !data) {
@@ -630,8 +716,15 @@ export async function updateEmergencyContactService(
     name: validation.normalized.name,
     relationship: validation.normalized.relationship,
     phone: validation.normalized.phone,
+    whatsappNumber: validation.normalized.whatsappNumber,
+    whatsappOptIn: validation.normalized.whatsappOptIn,
     email: validation.normalized.email,
+    preferredChannel: validation.normalized.preferredChannel,
+    role: validation.normalized.role,
     isPrimary: shouldBePrimary,
+    isActive: validation.normalized.isActive,
+    consentStatus: validation.normalized.consentStatus,
+    verificationStatus: validation.normalized.verificationStatus,
     updatedAt: nowIso,
   };
 

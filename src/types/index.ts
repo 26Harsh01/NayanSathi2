@@ -222,8 +222,15 @@ export interface EmergencyContact {
   name: string;
   relationship: string;
   phone: string;
+  whatsappNumber?: string;
+  whatsappOptIn?: boolean;
   email: string;
+  preferredChannel?: 'whatsapp' | 'sms' | 'whatsapp_then_sms' | 'sms_then_whatsapp' | 'call_only';
+  role?: 'primary_caregiver' | 'secondary_caregiver' | 'family_member' | 'emergency_support';
   isPrimary: boolean;
+  isActive?: boolean;
+  consentStatus?: 'granted' | 'pending' | 'revoked';
+  verificationStatus?: 'verified' | 'unverified' | 'pending';
   createdAt: string;
   updatedAt: string;
 }
@@ -655,8 +662,11 @@ export type GameId =
   | 'chess'
   | 'memory-match'
   | 'picture-puzzle'
+  | 'word-guess'
   | 'connect-four'
   | 'pattern-sequence';
+
+export type GameCategoryId = 'board' | 'memory' | 'puzzle' | 'word' | 'logic';
 
 export type GameDifficulty = 'easy' | 'medium' | 'hard';
 
@@ -758,4 +768,50 @@ export interface MusicPatientState {
   recentlyPlayed: RecentlyPlayedEntry[];
   preferences: MusicPreferences;
 }
+
+// --- News, Entertainment & Hub Personalization Types ---
+
+export type NewsCategoryId =
+  | 'top'
+  | 'india'
+  | 'world'
+  | 'technology'
+  | 'science'
+  | 'sports'
+  | 'health'
+  | 'education';
+
+export type SportCategoryId = 'cricket' | 'football' | 'badminton' | 'tennis' | 'other';
+
+export type EntertainmentSectionId =
+  | 'facts'
+  | 'jokes'
+  | 'stories'
+  | 'quiz'
+  | 'movies'
+  | 'sports'
+  | 'festivals';
+
+export interface PersonalBirthdayReminder {
+  id: string;
+  personName: string;
+  relationship: string;
+  monthDay: string; // MM-DD
+  note?: string;
+}
+
+export interface HubPersonalizationPreferences {
+  favoriteGameCategories: GameCategoryId[];
+  disabledGameIds: GameId[];
+  disabledMusicCategories: (MusicCategoryId | 'favourites' | 'relaxation')[];
+  favoriteNewsCategories: NewsCategoryId[];
+  disabledNewsCategories: NewsCategoryId[];
+  favoriteSports: SportCategoryId[];
+  favoriteEntertainmentSections: EntertainmentSectionId[];
+  disabledEntertainmentSections: EntertainmentSectionId[];
+  birthdays: PersonalBirthdayReminder[];
+}
+
+export * from './profile';
+export * from './emergency';
 

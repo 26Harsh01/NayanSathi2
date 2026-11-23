@@ -1,26 +1,37 @@
 import React from 'react';
 import {
+  AlertTriangle,
   Bell,
   Crosshair,
   Eye,
+  Gamepad2,
   HeartHandshake,
   LayoutGrid,
   MessageSquare,
+  Music,
+  Newspaper,
   Pause,
   Play,
   Settings,
+  Sparkles,
   Square,
   User,
 } from 'lucide-react';
 import { useEyeTracking } from '../../hooks/useEyeTracking';
 import { useAppState } from '../../context/AppStateContext';
+import { useEmergencySos } from '../../context/EmergencySosContext';
 import { useLifeHub } from '../../context/LifeHubContext';
+import { MiniAudioPlayer } from '../music/MiniAudioPlayer';
 
 export type AppRoute =
   | 'landing'
   | 'onboarding'
   | 'communicate'
   | 'life-hub'
+  | 'games'
+  | 'music'
+  | 'news'
+  | 'entertainment'
   | 'calibration'
   | 'caregiver'
   | 'settings'
@@ -42,6 +53,7 @@ export const AppShell: React.FC<AppShellProps> = ({
   const { isRunning, isPaused, setIsPaused, startTracking, stopTracking, status } =
     useEyeTracking();
   const { settings, setLanguage, calibration, profile } = useAppState();
+  const { activeAlert } = useEmergencySos();
   const { dueMedicines, photosMap } = useLifeHub();
   const lang = settings.communication.language;
 
@@ -59,6 +71,30 @@ export const AppShell: React.FC<AppShellProps> = ({
       labelEn: 'Life Hub',
       labelHi: 'जीवन केंद्र',
       icon: <LayoutGrid className="w-4 h-4 shrink-0" />,
+    },
+    {
+      route: 'games',
+      labelEn: 'Games',
+      labelHi: 'खेल',
+      icon: <Gamepad2 className="w-4 h-4 shrink-0" />,
+    },
+    {
+      route: 'music',
+      labelEn: 'Music',
+      labelHi: 'संगीत',
+      icon: <Music className="w-4 h-4 shrink-0" />,
+    },
+    {
+      route: 'news',
+      labelEn: 'News',
+      labelHi: 'समाचार',
+      icon: <Newspaper className="w-4 h-4 shrink-0" />,
+    },
+    {
+      route: 'entertainment',
+      labelEn: 'Entertainment',
+      labelHi: 'मनोरंजन',
+      icon: <Sparkles className="w-4 h-4 shrink-0" />,
     },
     {
       route: 'calibration',
@@ -253,6 +289,19 @@ export const AppShell: React.FC<AppShellProps> = ({
             </div>
 
             <div className="flex items-center gap-2.5 shrink-0">
+              {activeAlert && !hideSidebar && (
+                <button
+                  type="button"
+                  data-gaze-target="header_sos_active"
+                  data-gaze-label="SOS Active"
+                  onClick={() => onNavigate(currentRoute === 'caregiver' ? 'caregiver' : 'communicate')}
+                  className="px-2.5 py-1.5 rounded-lg bg-red-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>{lang === 'hi' ? 'SOS सक्रिय' : 'SOS Active'}</span>
+                </button>
+              )}
+
               {dueMedicines.length > 0 && !hideSidebar && (
                 <button
                   type="button"
@@ -359,6 +408,7 @@ export const AppShell: React.FC<AppShellProps> = ({
         </header>
 
         <main className="flex-1">{children}</main>
+        <MiniAudioPlayer currentRoute={currentRoute} onNavigate={onNavigate} />
       </div>
     </div>
   );

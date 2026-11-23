@@ -14,13 +14,25 @@ import {
 } from 'lucide-react';
 import type { AppRoute } from '../components/layout/AppShell';
 import { useAppState } from '../context/AppStateContext';
+import { useHubPreferences } from '../context/HubPreferencesContext';
 import { useLifeHub } from '../context/LifeHubContext';
+import { useMusic } from '../context/MusicContext';
+import { MUSIC_CATEGORIES } from '../features/storage/games-music-storage';
 import {
   calculateAgeFromDob,
   PERSONAL_INTEREST_OPTIONS,
 } from '../features/communication/personal-autonomy';
 import { getAvailableVoices, type VoiceSummary } from '../features/communication/text-to-speech';
-import type { ButtonSize, FavouriteItem, Language } from '../types';
+import type {
+  ButtonSize,
+  EntertainmentSectionId,
+  FavouriteItem,
+  GameCategoryId,
+  GameId,
+  Language,
+  NewsCategoryId,
+  SportCategoryId,
+} from '../types';
 
 interface MyProfilePageProps {
   onNavigate: (route: AppRoute) => void;
@@ -48,8 +60,25 @@ export const MyProfilePage: React.FC<MyProfilePageProps> = ({ onNavigate }) => {
     deleteFavouriteItem,
     getPersonalIntroText,
   } = useLifeHub();
+  const { musicState, updateMusicPreferences } = useMusic();
+  const {
+    hubPrefs,
+    toggleFavoriteGameCategory,
+    toggleGameEnabled,
+    toggleMusicCategoryEnabled,
+    toggleFavoriteNewsCategory,
+    toggleNewsCategoryEnabled,
+    toggleFavoriteSport,
+    toggleFavoriteEntertainmentSection,
+    toggleEntertainmentSectionEnabled,
+    addBirthdayReminder,
+    removeBirthdayReminder,
+  } = useHubPreferences();
 
   const [newAccountName, setNewAccountName] = useState('');
+  const [bdayName, setBdayName] = useState('');
+  const [bdayRel, setBdayRel] = useState('');
+  const [bdayMmDd, setBdayMmDd] = useState('');
   const [customInterest, setCustomInterest] = useState('');
   const [favCategory, setFavCategory] = useState<FavouriteItem['category']>('food');
   const [favLabel, setFavLabel] = useState('');
@@ -700,6 +729,329 @@ export const MyProfilePage: React.FC<MyProfilePageProps> = ({ onNavigate }) => {
             </div>
           </div>
         )}
+      </section>
+
+      {/* Games, Music, News & Entertainment Personalization */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              Games, Music, News &amp; Entertainment Preferences
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Personalize favourite categories and toggle off sections you prefer not to display.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(['games', 'music', 'news', 'entertainment'] as const).map((r) => (
+              <button
+                key={r}
+                type="button"
+                onClick={() => onNavigate(r)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-semibold capitalize cursor-pointer"
+              >
+                Open {r}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Games Personalization */}
+        <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+            Favourite Game Types &amp; Visible Games
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ['board', 'Board Games'],
+                ['memory', 'Memory'],
+                ['puzzle', 'Puzzles'],
+                ['word', 'Word Games'],
+                ['logic', 'Number & Pattern'],
+              ] as [GameCategoryId, string][]
+            ).map(([cat, label]) => {
+              const active = hubPrefs.favoriteGameCategories.includes(cat);
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => toggleFavoriteGameCategory(cat)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer ${
+                    active
+                      ? 'bg-teal-700 text-white border-teal-800'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                  }`}
+                >
+                  {active ? '★ ' : ''}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {(
+              [
+                ['tic-tac-toe', 'Tic-Tac-Toe'],
+                ['memory-match', 'Memory Match'],
+                ['picture-puzzle', 'Picture Puzzle'],
+                ['word-guess', 'Word Guess'],
+                ['pattern-sequence', 'Number & Pattern'],
+                ['connect-four', 'Connect Four'],
+                ['chess', 'Chess'],
+              ] as [GameId, string][]
+            ).map(([gid, label]) => {
+              const enabled = !hubPrefs.disabledGameIds.includes(gid);
+              return (
+                <button
+                  key={gid}
+                  type="button"
+                  onClick={() => toggleGameEnabled(gid)}
+                  className={`px-3 py-1 rounded-lg border text-xs font-medium cursor-pointer ${
+                    enabled
+                      ? 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700'
+                      : 'bg-slate-100 dark:bg-slate-800/50 text-slate-400 line-through border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  {enabled ? 'Shown: ' : 'Hidden: '}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Music Preferences */}
+        <div className="space-y-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+            Favourite Music Genres &amp; Category Visibility
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {MUSIC_CATEGORIES.map((cat) => {
+              const isFav = musicState.preferences.favouriteGenres.includes(cat.id);
+              const isShown = !hubPrefs.disabledMusicCategories.includes(cat.id);
+              return (
+                <div key={cat.id} className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateMusicPreferences((prev) => ({
+                        ...prev,
+                        favouriteGenres: isFav
+                          ? prev.favouriteGenres.filter((g) => g !== cat.id)
+                          : [...prev.favouriteGenres, cat.id],
+                      }))
+                    }
+                    className={`px-2.5 py-1.5 rounded-l-lg border text-xs font-semibold cursor-pointer ${
+                      isFav
+                        ? 'bg-teal-700 text-white border-teal-800'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                    }`}
+                  >
+                    {isFav ? '★ ' : ''}
+                    {cat.labelEn}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleMusicCategoryEnabled(cat.id)}
+                    className="px-2 py-1.5 rounded-r-lg border border-slate-300 dark:border-slate-700 text-[11px] cursor-pointer"
+                  >
+                    {isShown ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* News & Sports Preferences */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+              News Categories (Click to Star · Toggle Visibility)
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['top', 'Top Headlines'],
+                  ['india', 'India'],
+                  ['world', 'World'],
+                  ['technology', 'Technology'],
+                  ['science', 'Science'],
+                  ['sports', 'Sports'],
+                  ['health', 'Health'],
+                  ['education', 'Education'],
+                ] as [NewsCategoryId, string][]
+              ).map(([cid, label]) => {
+                const isFav = hubPrefs.favoriteNewsCategories.includes(cid);
+                const isShown = !hubPrefs.disabledNewsCategories.includes(cid);
+                return (
+                  <div key={cid} className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleFavoriteNewsCategory(cid)}
+                      className={`px-2.5 py-1.5 rounded-l-lg border text-xs font-semibold cursor-pointer ${
+                        isFav
+                          ? 'bg-teal-700 text-white border-teal-800'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                      }`}
+                    >
+                      {isFav ? '★ ' : ''}
+                      {label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleNewsCategoryEnabled(cid)}
+                      className="px-2 py-1.5 rounded-r-lg border border-slate-300 dark:border-slate-700 text-[11px] cursor-pointer"
+                    >
+                      {isShown ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+              Favourite Sports &amp; Entertainment Sections
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(['cricket', 'football', 'badminton', 'tennis', 'other'] as SportCategoryId[]).map(
+                (sp) => {
+                  const active = hubPrefs.favoriteSports.includes(sp);
+                  return (
+                    <button
+                      key={sp}
+                      type="button"
+                      onClick={() => toggleFavoriteSport(sp)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-semibold capitalize cursor-pointer ${
+                        active
+                          ? 'bg-teal-700 text-white border-teal-800'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                      }`}
+                    >
+                      {active ? '★ ' : ''}
+                      {sp}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {(
+                [
+                  ['facts', 'Facts'],
+                  ['jokes', 'Jokes'],
+                  ['stories', 'Stories'],
+                  ['quiz', 'Quizzes'],
+                  ['movies', 'Movies'],
+                  ['sports', 'Sports'],
+                  ['festivals', 'Festivals'],
+                ] as [EntertainmentSectionId, string][]
+              ).map(([sid, label]) => {
+                const isFav = hubPrefs.favoriteEntertainmentSections.includes(sid);
+                const isShown = !hubPrefs.disabledEntertainmentSections.includes(sid);
+                return (
+                  <div key={sid} className="inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleFavoriteEntertainmentSection(sid)}
+                      className={`px-2.5 py-1 rounded-l-lg border text-xs font-semibold cursor-pointer ${
+                        isFav
+                          ? 'bg-teal-700 text-white border-teal-800'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700'
+                      }`}
+                    >
+                      {isFav ? '★ ' : ''}
+                      {label}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => toggleEntertainmentSectionEnabled(sid)}
+                      className="px-2 py-1 rounded-r-lg border border-slate-300 dark:border-slate-700 text-[11px] cursor-pointer"
+                    >
+                      {isShown ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Birthday Reminders Synced with Festivals & Special Days */}
+        <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+            Family &amp; Friend Birthdays (Shown in Festivals &amp; Special Days)
+          </p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <input
+              type="text"
+              placeholder="Name *"
+              value={bdayName}
+              onChange={(e) => setBdayName(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950"
+            />
+            <input
+              type="text"
+              placeholder="Relationship"
+              value={bdayRel}
+              onChange={(e) => setBdayRel(e.target.value)}
+              className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950"
+            />
+            <input
+              type="text"
+              placeholder="MM-DD (e.g. 05-19) *"
+              value={bdayMmDd}
+              onChange={(e) => setBdayMmDd(e.target.value)}
+              className="w-40 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const res = addBirthdayReminder({
+                  personName: bdayName,
+                  relationship: bdayRel,
+                  monthDay: bdayMmDd,
+                });
+                if (!res.ok) {
+                  notify(res.error || 'Invalid birthday format.');
+                  return;
+                }
+                setBdayName('');
+                setBdayRel('');
+                setBdayMmDd('');
+                notify('Birthday reminder saved.');
+              }}
+              className="px-3.5 py-1.5 rounded-lg bg-teal-700 text-white text-xs font-semibold cursor-pointer"
+            >
+              Add Birthday
+            </button>
+          </div>
+          {hubPrefs.birthdays.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {hubPrefs.birthdays.map((b) => (
+                <span
+                  key={b.id}
+                  className="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs inline-flex items-center gap-2"
+                >
+                  <span>
+                    {b.personName} ({b.monthDay})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeBirthdayReminder(b.id)}
+                    className="text-red-600 cursor-pointer"
+                    aria-label={`Remove ${b.personName}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

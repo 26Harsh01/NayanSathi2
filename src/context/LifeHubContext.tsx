@@ -66,6 +66,7 @@ interface LifeHubContextValue {
   setActiveActor: (actor: ActiveCaregiverActor) => void;
   hasPermission: (perm: CaregiverPermissionKey) => boolean;
   uploadPhotoAsset: (assetPrefix: string, file: File) => Promise<string>;
+  refreshPhotos: () => Promise<void>;
   // Daily Assistance: Choices, Comfort, Belongings, Help Tracker
   addChoiceOption: (
     category: ChoiceCategoryId,
@@ -274,6 +275,12 @@ export const LifeHubProvider: React.FC<{ children: React.ReactNode }> = ({ child
     },
     [activePatientId]
   );
+
+  const refreshPhotos = useCallback(async () => {
+    const pid = activePatientId || getActivePatientId();
+    const imgs = await loadAllImagesForPatient(pid);
+    setPhotosMap(imgs);
+  }, [activePatientId]);
 
   const createHelpRequest = useCallback(
     (category: HelpRequestCategory, title: string, details?: string): HelpRequest => {
@@ -1119,6 +1126,7 @@ export const LifeHubProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setActiveActor,
         hasPermission,
         uploadPhotoAsset,
+        refreshPhotos,
         addChoiceOption,
         deleteChoiceOption,
         confirmChoiceSelection,

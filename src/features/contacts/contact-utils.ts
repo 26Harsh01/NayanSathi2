@@ -1,9 +1,23 @@
+import type {
+  EmergencyConsentStatus,
+  EmergencyContactRole,
+  EmergencyNotificationChannel,
+  EmergencyVerificationStatus,
+} from '../../types';
+
 export interface ContactInput {
   name: string;
   relationship: string;
   phone: string;
+  whatsappNumber?: string;
+  whatsappOptIn?: boolean;
   email: string;
+  preferredChannel?: EmergencyNotificationChannel;
+  role?: EmergencyContactRole;
   isPrimary?: boolean;
+  isActive?: boolean;
+  consentStatus?: EmergencyConsentStatus;
+  verificationStatus?: EmergencyVerificationStatus;
 }
 
 export interface ValidationResult<T = string> {
@@ -18,10 +32,19 @@ export interface ContactValidationResult {
     name: string;
     relationship: string;
     phone: string;
+    whatsappNumber: string;
+    whatsappOptIn: boolean;
     email: string;
+    preferredChannel: EmergencyNotificationChannel;
+    role: EmergencyContactRole;
     isPrimary: boolean;
+    isActive: boolean;
+    consentStatus: EmergencyConsentStatus;
+    verificationStatus: EmergencyVerificationStatus;
   };
-  fieldErrors: Partial<Record<'name' | 'relationship' | 'phone' | 'email', string>>;
+  fieldErrors: Partial<
+    Record<'name' | 'relationship' | 'phone' | 'whatsappNumber' | 'email', string>
+  >;
   error?: string;
 }
 
@@ -91,6 +114,23 @@ export function validatePhoneNumber(raw: string): ValidationResult<string> {
 }
 
 /**
+ * Strict E.164 international phone validation (+<country_code><subscriber_number>, 8..15 digits total).
+ * Required for automated WhatsApp Cloud API and SMS dispatch.
+ */
+export function validateE164PhoneNumber(raw: string): ValidationResult<string> {
+  const base = validatePhoneNumber(raw);
+  if (!base.valid) return base;
+  if (!/^\+[1-9]\d{6,14}$/.test(base.normalized)) {
+    return {
+      valid: false,
+      normalized: '',
+      error: 'Include the international country code starting with + (E.164 format, e.g. +919876543210).',
+    };
+  }
+  return base;
+}
+
+/**
  * Validates an email address. When required=false, empty strings are accepted as unconfigured.
  */
 export function validateEmailAddress(raw: string, required = false): ValidationResult<string> {
@@ -137,10 +177,32 @@ export function validateContactInput(input: ContactInput): ContactValidationResu
     fieldErrors.phone = phoneCheck.error || 'Enter a valid phone number.';
   }
 
+  const rawWa = (input.whatsappNumber ?? '').trim();
+  let normalizedWa = '';
+  if (rawWa || input.whatsappOptIn) {
+    if (!rawWa && input.whatsappOptIn) {
+      fieldErrors.whatsappNumber =
+        'Enter an E.164 WhatsApp number (e.g. +919876543210) or uncheck WhatsApp-enabled.';
+    } else if (rawWa) {
+      const waCheck = validateE164PhoneNumber(rawWa);
+      if (!waCheck.valid) {
+        fieldErrors.whatsappNumber = waCheck.error || 'Enter a valid E.164 WhatsApp number.';
+      } else {
+        normalizedWa = waCheck.normalized;
+      }
+    }
+  }
+
   const emailCheck = validateEmailAddress(input.email, false);
   if (!emailCheck.valid) {
     fieldErrors.email = emailCheck.error || 'Enter a valid email address.';
   }
+
+  const isPrimary = Boolean(input.isPrimary);
+  const role: EmergencyContactRole =
+    input.role ?? (isPrimary ? 'primary_caregiver' : 'family_member');
+  const preferredChannel: EmergencyNotificationChannel =
+    input.preferredChannel ?? 'whatsapp_then_sms';
 
   const errorList = Object.values(fieldErrors).filter(Boolean);
   return {
@@ -149,8 +211,15 @@ export function validateContactInput(input: ContactInput): ContactValidationResu
       name,
       relationship,
       phone: phoneCheck.normalized,
+      whatsappNumber: normalizedWa,
+      whatsappOptIn: Boolean(input.whatsappOptIn && normalizedWa),
       email: emailCheck.normalized,
-      isPrimary: Boolean(input.isPrimary),
+      preferredChannel,
+      role,
+      isPrimary,
+      isActive: input.isActive !== false,
+      consentStatus: input.consentStatus ?? 'pending',
+      verificationStatus: input.verificationStatus ?? 'unverified',
     },
     fieldErrors,
     error: errorList[0],
@@ -165,6 +234,27 @@ export function buildTelUri(phone: string): string | null {
   const check = validatePhoneNumber(phone);
   if (!check.valid || !check.normalized) return null;
   return `tel:${check.normalized}`;
+}
+
+/**
+ * Builds a sanitized `sms:` URI for device handoff when internet/API is unavailable.
+ */
+export function buildSmsHandoffUri(phone: string, body: string): string | null {
+  const check = validatePhoneNumber(phone);
+  if (!check.valid || !check.normalized) return null;
+  const cleanBody = body.replace(/\r\n/g, '\n').trim().slice(0, 480);
+  return `sms:${check.normalized}?body=${encodeURIComponent(cleanBody)}`;
+}
+
+/**
+ * Builds a sanitized `https://wa.me/...` handoff link for manual device fallback.
+ */
+export function buildWhatsAppHandoffUrl(phone: string, body: string): string | null {
+  const check = validateE164PhoneNumber(phone);
+  if (!check.valid || !check.normalized) return null;
+  const digits = check.normalized.slice(1);
+  const cleanBody = body.replace(/\r\n/g, '\n').trim().slice(0, 480);
+  return `https://wa.me/${digits}?text=${encodeURIComponent(cleanBody)}`;
 }
 
 /**

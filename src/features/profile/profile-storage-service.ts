@@ -325,6 +325,7 @@ export function mapProfilePrefsToAppSettings(
       speechRate: comm.speechRate,
     },
     privacy: {
+      ...currentSettings.privacy,
       historyConsentEnabled: record.privacy.historyConsentEnabled,
     },
   };
@@ -927,7 +928,7 @@ export function exportPersonalDataBundle(
     medicalInformation: record.medical,
     privacyControls: record.privacy,
     photoMetadata: record.photos,
-    emergencyContacts: readContactsFromLocalStorage(targetUserId).contacts,
+    emergencyContacts: readContactsFromLocalStorage().contacts,
     customCategories: loadCategories(targetUserId).filter((c) => c.isCustom),
     customPhrases: loadPhrases(targetUserId).filter((p) => p.isCustom),
     communicationHistory: loadCommunicationHistory(targetUserId),

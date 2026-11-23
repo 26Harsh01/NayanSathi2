@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import {
+  AlertTriangle,
   ChevronDown,
   Download,
+  MapPin,
   RotateCcw,
   ShieldCheck,
   Sliders,
@@ -10,6 +12,7 @@ import {
 } from 'lucide-react';
 import type { AppRoute } from '../components/layout/AppShell';
 import { useAppState } from '../context/AppStateContext';
+import { useEmergencySos } from '../context/EmergencySosContext';
 import { useLifeHub } from '../context/LifeHubContext';
 import { useEyeTracking } from '../hooks/useEyeTracking';
 import { queryCameraPermissionState } from '../features/eye-tracking/camera-manager';
@@ -17,7 +20,13 @@ import { computePersonalizedBlinkThresholds } from '../features/eye-tracking/bli
 import { getAvailableVoices, type VoiceSummary } from '../features/communication/text-to-speech';
 import { DEFAULT_SETTINGS } from '../features/storage/local-storage';
 import { isSupabaseConfigured } from '../lib/supabase';
-import type { ButtonSize, InteractionMode, Language, ThemeMode } from '../types';
+import type {
+  ButtonSize,
+  EmergencyConfirmationMode,
+  InteractionMode,
+  Language,
+  ThemeMode,
+} from '../types';
 
 interface SettingsPageProps {
   onNavigate?: (route: AppRoute) => void;
@@ -37,6 +46,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     resetAllAppData,
   } = useAppState();
   const { state, updateSmartHomeConfig, exportPatientDataJson } = useLifeHub();
+  const { sosSettings, locationPermission, updateSosSettings, requestLocationPermission } =
+    useEmergencySos();
   const { isRunning, startTracking, stopTracking } = useEyeTracking();
 
   const [camPerm, setCamPerm] = useState<string>('checking...');
@@ -45,6 +56,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmDeleteProfile, setConfirmDeleteProfile] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [sosLocationMsg, setSosLocationMsg] = useState<string | null>(null);
 
   useEffect(() => {
     queryCameraPermissionState().then(setCamPerm);
@@ -759,6 +771,80 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
           />
           <span>Allow consented caregivers to share Caregiver Handover Journal entries</span>
         </label>
+      </section>
+
+      {/* SECTION 5B: Emergency SOS Preferences */}
+      <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-red-700 dark:text-red-400" />
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+              Emergency SOS Activation & Location Sharing
+            </h2>
+          </div>
+          {onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate('caregiver')}
+              className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm font-semibold cursor-pointer"
+            >
+              Configure SOS Contacts & Templates
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <label className="block space-y-1">
+            <span className="font-medium">Emergency Activation Method</span>
+            <select
+              value={sosSettings.confirmationMode}
+              onChange={(e) =>
+                void updateSosSettings({
+                  confirmationMode: e.target.value as EmergencyConfirmationMode,
+                })
+              }
+              className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950"
+            >
+              <option value="two_step">Two-Step Confirmation + CANCEL (Accidental Gaze Protection)</option>
+              <option value="single_step">Single-Step Immediate Trigger</option>
+            </select>
+          </label>
+
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 flex items-center justify-between gap-3">
+            <div>
+              <span className="text-xs text-slate-500 block">SOS Location Permission</span>
+              <span className="font-semibold capitalize">{locationPermission}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                void requestLocationPermission().then((res) => setSosLocationMsg(res.message))
+              }
+              className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-teal-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Request Permission</span>
+            </button>
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2.5 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={sosSettings.locationSharingEnabled}
+            onChange={(e) =>
+              void updateSosSettings({ locationSharingEnabled: e.target.checked })
+            }
+            className="w-4 h-4 accent-teal-600"
+          />
+          <span>
+            Share one-shot GPS location ONLY when an Emergency SOS alert is triggered (never tracks continuously)
+          </span>
+        </label>
+
+        {sosLocationMsg && (
+          <p className="text-xs font-medium text-teal-700 dark:text-teal-400">{sosLocationMsg}</p>
+        )}
       </section>
 
       {/* SECTION 6: Privacy & Security */}

@@ -15,6 +15,7 @@ import {
 import type { AppRoute } from '../layout/AppShell';
 import { useAppState } from '../../context/AppStateContext';
 import { useEmergencyContacts } from '../../context/EmergencyContactContext';
+import { useEmergencySos } from '../../context/EmergencySosContext';
 import { EMERGENCY_PHRASES } from '../../features/communication/phrase-library';
 import { speakText } from '../../features/communication/text-to-speech';
 import { buildMailtoUri, buildTelUri } from '../../features/contacts/contact-utils';
@@ -35,6 +36,7 @@ export const EmergencyContactPanel: React.FC<EmergencyContactPanelProps> = ({
 }) => {
   const { settings, recordCommunication } = useAppState();
   const { contacts, primaryContact, storageError } = useEmergencyContacts();
+  const { activeAlert } = useEmergencySos();
   const lang = settings.communication.language;
 
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -196,6 +198,24 @@ export const EmergencyContactPanel: React.FC<EmergencyContactPanelProps> = ({
           </GazeButton>
         </div>
       </div>
+
+      {activeAlert && (
+        <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-400 dark:border-red-800 flex items-center justify-between gap-2 text-xs text-red-900 dark:text-red-100">
+          <span className="font-bold truncate">
+            {lang === 'hi' ? 'SOS सक्रिय: ' : 'SOS Active: '}
+            {activeAlert.currentStatus.replace(/_/g, ' ')}
+          </span>
+          {onOpenEmergencyModal && (
+            <button
+              type="button"
+              onClick={onOpenEmergencyModal}
+              className="px-2.5 py-1 rounded-lg bg-red-700 text-white font-semibold shrink-0 cursor-pointer"
+            >
+              {lang === 'hi' ? 'स्थिति देखें' : 'View Status'}
+            </button>
+          )}
+        </div>
+      )}
 
       {storageError && (
         <div
@@ -429,6 +449,18 @@ export const EmergencyContactPanel: React.FC<EmergencyContactPanelProps> = ({
                   <dt className="text-slate-500 dark:text-slate-400">Relationship</dt>
                   <dd className="font-medium text-slate-900 dark:text-white">
                     {activeContact.relationship || 'Not specified'}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-slate-500 dark:text-slate-400">Automated SOS</dt>
+                  <dd className="font-medium text-slate-900 dark:text-white">
+                    {activeContact.isActive !== false &&
+                    activeContact.consentStatus === 'granted' &&
+                    activeContact.verificationStatus === 'verified'
+                      ? activeContact.whatsappOptIn
+                        ? 'WhatsApp + SMS Ready'
+                        : 'SMS Ready'
+                      : 'Needs Consent/Verification'}
                   </dd>
                 </div>
               </dl>

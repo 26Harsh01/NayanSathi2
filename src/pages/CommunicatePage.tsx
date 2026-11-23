@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import type { AppRoute } from '../components/layout/AppShell';
 import { useAppState } from '../context/AppStateContext';
+import { useEmergencySos } from '../context/EmergencySosContext';
 import { GazeButton } from '../components/gaze/GazeButton';
 import { EmergencyContactPanel } from '../components/communication/EmergencyContactPanel';
 import { EmergencyModal } from '../components/communication/EmergencyModal';
@@ -143,6 +144,7 @@ export const CommunicatePage: React.FC<CommunicatePageProps> = ({ onNavigate }) 
     addCustomPhrase,
     recordCommunication,
   } = useAppState();
+  const { activeAlert, sosSettings, triggerSos } = useEmergencySos();
 
   const lang = settings.communication.language;
   const activeContext = settings.communication.activeContext || 'home';
@@ -427,14 +429,30 @@ export const CommunicatePage: React.FC<CommunicatePageProps> = ({ onNavigate }) 
 
             <GazeButton
               gazeId="comm_emergency"
-              gazeLabel="Emergency Panel"
+              gazeLabel={activeAlert ? 'SOS Active' : 'Emergency SOS'}
               variant="danger"
               sizeOverride="standard"
-              onClick={() => setEmergencyOpen(true)}
-              className="whitespace-nowrap"
+              onClick={() => {
+                if (!activeAlert && sosSettings.confirmationMode === 'single_step') {
+                  void triggerSos({
+                    alertType: 'sos',
+                    customMessage: sentenceState.text.trim() || undefined,
+                  });
+                }
+                setEmergencyOpen(true);
+              }}
+              className={`whitespace-nowrap ${activeAlert ? 'ring-2 ring-red-400' : ''}`}
             >
               <AlertTriangle className="w-4 h-4" />
-              <span>{lang === 'hi' ? 'आपातकाल' : 'Emergency'}</span>
+              <span>
+                {activeAlert
+                  ? lang === 'hi'
+                    ? 'SOS सक्रिय'
+                    : 'SOS Active'
+                  : lang === 'hi'
+                    ? 'आपातकाल (SOS)'
+                    : 'Emergency SOS'}
+              </span>
             </GazeButton>
           </div>
 

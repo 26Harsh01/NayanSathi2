@@ -4,6 +4,9 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
+import { createEmergencyRouter } from './server/emergency/routes';
+import { createMediaRouter } from './server/media/routes';
+import { startEscalationWorker } from './server/emergency/escalation-worker';
 
 dotenv.config();
 
@@ -13,7 +16,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
-app.use(express.json({ limit: '64kb' }));
+app.use(
+  express.json({
+    limit: '256kb',
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  })
+);
+app.use('/api/emergency', createEmergencyRouter());
 
 function hasValidGeminiKey(): boolean {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -32,6 +43,8 @@ function getGeminiClient(): GoogleGenAI | null {
     },
   });
 }
+
+app.use('/api', createMediaRouter(getGeminiClient));
 
 app.get('/api/health', (_req, res) => {
   const geminiConfigured = hasValidGeminiKey();
@@ -360,6 +373,7 @@ async function startServer() {
     });
   }
 
+  startEscalationWorker(5000);
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`NayanSathi GazeConnect server running on http://0.0.0.0:${PORT}`);
   });

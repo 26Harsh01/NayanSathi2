@@ -52,6 +52,7 @@ export function createDefaultGamesState(): GamesPatientState {
     chess: emptyScore(),
     'memory-match': emptyScore(),
     'picture-puzzle': emptyScore(),
+    'word-guess': emptyScore(),
     'connect-four': emptyScore(),
     'pattern-sequence': emptyScore(),
   };

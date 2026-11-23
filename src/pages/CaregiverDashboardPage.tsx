@@ -6,6 +6,7 @@ import {
   Crosshair,
   Edit2,
   FileText,
+  FlaskConical,
   Mail,
   Phone,
   Plus,
@@ -16,14 +17,20 @@ import {
   Users,
 } from 'lucide-react';
 import type { AppRoute } from '../components/layout/AppShell';
+import { EmergencySosDashboard } from '../components/caregiver/EmergencySosDashboard';
 import { useAppState } from '../context/AppStateContext';
 import { useEmergencyContacts } from '../context/EmergencyContactContext';
+import { useEmergencySos } from '../context/EmergencySosContext';
 import { useLifeHub } from '../context/LifeHubContext';
 import { validateContactInput, type ContactInput } from '../features/contacts/contact-utils';
 import type {
   ButtonSize,
   CaregiverPermissionKey,
   CaregiverRole,
+  EmergencyConsentStatus,
+  EmergencyContactRole,
+  EmergencyNotificationChannel,
+  EmergencyVerificationStatus,
   HelpRequestStatus,
   Language,
 } from '../types';
@@ -98,6 +105,23 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
   const [editEn, setEditEn] = useState('');
   const [editHi, setEditHi] = useState('');
 
+  const { sosSettings, triggerSos, isTriggering } = useEmergencySos();
+
+  const emptyDraft = (isFirstPrimary: boolean): ContactInput => ({
+    name: '',
+    relationship: '',
+    phone: '',
+    whatsappNumber: '',
+    whatsappOptIn: false,
+    email: '',
+    preferredChannel: 'whatsapp_then_sms',
+    role: isFirstPrimary ? 'primary_caregiver' : 'family_member',
+    isPrimary: isFirstPrimary,
+    isActive: true,
+    consentStatus: 'granted',
+    verificationStatus: 'verified',
+  });
+
   const [editingContactId, setEditingContactId] = useState<string | null>(
     () => primaryContact?.id ?? null
   );
@@ -108,13 +132,20 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
           name: primaryContact.name,
           relationship: primaryContact.relationship,
           phone: primaryContact.phone,
+          whatsappNumber: primaryContact.whatsappNumber ?? '',
+          whatsappOptIn: Boolean(primaryContact.whatsappOptIn),
           email: primaryContact.email,
+          preferredChannel: primaryContact.preferredChannel ?? 'whatsapp_then_sms',
+          role: primaryContact.role ?? (primaryContact.isPrimary ? 'primary_caregiver' : 'family_member'),
           isPrimary: primaryContact.isPrimary,
+          isActive: primaryContact.isActive !== false,
+          consentStatus: primaryContact.consentStatus ?? 'pending',
+          verificationStatus: primaryContact.verificationStatus ?? 'unverified',
         }
-      : { name: '', relationship: '', phone: '', email: '', isPrimary: true }
+      : emptyDraft(true)
   );
   const [contactFieldErrors, setContactFieldErrors] = useState<
-    Partial<Record<'name' | 'relationship' | 'phone' | 'email', string>>
+    Partial<Record<'name' | 'relationship' | 'phone' | 'whatsappNumber' | 'email', string>>
   >({});
   const [contactError, setContactError] = useState<string | null>(null);
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
@@ -150,18 +181,19 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
         name: target.name,
         relationship: target.relationship,
         phone: target.phone,
+        whatsappNumber: target.whatsappNumber ?? '',
+        whatsappOptIn: Boolean(target.whatsappOptIn),
         email: target.email,
+        preferredChannel: target.preferredChannel ?? 'whatsapp_then_sms',
+        role: target.role ?? (target.isPrimary ? 'primary_caregiver' : 'family_member'),
         isPrimary: target.isPrimary,
+        isActive: target.isActive !== false,
+        consentStatus: target.consentStatus ?? 'pending',
+        verificationStatus: target.verificationStatus ?? 'unverified',
       });
     } else {
       setEditingContactId(null);
-      setContactDraft({
-        name: '',
-        relationship: '',
-        phone: '',
-        email: '',
-        isPrimary: true,
-      });
+      setContactDraft(emptyDraft(true));
     }
   }, [contacts, primaryContact, editingContactId, isAddingNewContact]);
 
@@ -206,13 +238,7 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
   const handleStartNewContact = () => {
     setIsAddingNewContact(true);
     setEditingContactId(null);
-    setContactDraft({
-      name: '',
-      relationship: '',
-      phone: '',
-      email: '',
-      isPrimary: contacts.length === 0,
-    });
+    setContactDraft(emptyDraft(contacts.length === 0));
     setContactFieldErrors({});
     setContactError(null);
     setContactSuccess(null);
@@ -227,8 +253,15 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
       name: found.name,
       relationship: found.relationship,
       phone: found.phone,
+      whatsappNumber: found.whatsappNumber ?? '',
+      whatsappOptIn: Boolean(found.whatsappOptIn),
       email: found.email,
+      preferredChannel: found.preferredChannel ?? 'whatsapp_then_sms',
+      role: found.role ?? (found.isPrimary ? 'primary_caregiver' : 'family_member'),
       isPrimary: found.isPrimary,
+      isActive: found.isActive !== false,
+      consentStatus: found.consentStatus ?? 'pending',
+      verificationStatus: found.verificationStatus ?? 'unverified',
     });
     setContactFieldErrors({});
     setContactError(null);
@@ -254,8 +287,15 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
       name: validation.normalized.name,
       relationship: validation.normalized.relationship,
       phone: validation.normalized.phone,
+      whatsappNumber: validation.normalized.whatsappNumber,
+      whatsappOptIn: validation.normalized.whatsappOptIn,
       email: validation.normalized.email,
+      preferredChannel: validation.normalized.preferredChannel,
+      role: validation.normalized.role,
       isPrimary: contacts.length === 0 ? true : Boolean(contactDraft.isPrimary),
+      isActive: validation.normalized.isActive,
+      consentStatus: validation.normalized.consentStatus,
+      verificationStatus: validation.normalized.verificationStatus,
     };
 
     const result =
@@ -279,8 +319,15 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
         name: savedRecord.name,
         relationship: savedRecord.relationship,
         phone: savedRecord.phone,
+        whatsappNumber: savedRecord.whatsappNumber ?? '',
+        whatsappOptIn: Boolean(savedRecord.whatsappOptIn),
         email: savedRecord.email,
+        preferredChannel: savedRecord.preferredChannel ?? 'whatsapp_then_sms',
+        role: savedRecord.role ?? (savedRecord.isPrimary ? 'primary_caregiver' : 'family_member'),
         isPrimary: savedRecord.isPrimary,
+        isActive: savedRecord.isActive !== false,
+        consentStatus: savedRecord.consentStatus ?? 'pending',
+        verificationStatus: savedRecord.verificationStatus ?? 'unverified',
       });
     }
 
@@ -372,6 +419,9 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
           {savedToast}
         </div>
       )}
+
+      {/* EMERGENCY SOS ALERTS & REAL-TIME DISPATCH CENTER */}
+      <EmergencySosDashboard />
 
       {/* NEW ROW A: Help Request Queue + Life Hub Care Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -1178,11 +1228,11 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
 
               <label className="block space-y-1 text-xs">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  Phone Number * (include + country code if international)
+                  Mobile Number * (E.164 with + country code)
                 </span>
                 <input
                   type="tel"
-                  placeholder="e.g. +91 98765 43210"
+                  placeholder="e.g. +919876543210"
                   value={contactDraft.phone}
                   onChange={(e) => {
                     setContactDraft((prev) => ({ ...prev, phone: e.target.value }));
@@ -1203,8 +1253,50 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
               </label>
 
               <label className="block space-y-1 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    WhatsApp Number (E.164)
+                  </span>
+                  {contactDraft.phone && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setContactDraft((prev) => ({
+                          ...prev,
+                          whatsappNumber: prev.phone,
+                        }))
+                      }
+                      className="text-[11px] font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                    >
+                      Copy Mobile
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="tel"
+                  placeholder="e.g. +919876543210"
+                  value={contactDraft.whatsappNumber ?? ''}
+                  onChange={(e) => {
+                    setContactDraft((prev) => ({ ...prev, whatsappNumber: e.target.value }));
+                    setContactFieldErrors((prev) => ({ ...prev, whatsappNumber: undefined }));
+                  }}
+                  aria-invalid={Boolean(contactFieldErrors.whatsappNumber)}
+                  className={`w-full px-3 py-2 rounded-lg border bg-white dark:bg-slate-950 text-sm ${
+                    contactFieldErrors.whatsappNumber
+                      ? 'border-red-500'
+                      : 'border-slate-300 dark:border-slate-700'
+                  }`}
+                />
+                {contactFieldErrors.whatsappNumber && (
+                  <span className="text-red-600 dark:text-red-400 block">
+                    {contactFieldErrors.whatsappNumber}
+                  </span>
+                )}
+              </label>
+
+              <label className="block space-y-1 text-xs">
                 <span className="font-semibold text-slate-700 dark:text-slate-300">
-                  Email Address
+                  Email Address (Optional)
                 </span>
                 <input
                   type="email"
@@ -1226,6 +1318,119 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
                     {contactFieldErrors.email}
                   </span>
                 )}
+              </label>
+
+              <label className="block space-y-1 text-xs">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  Contact Role Designation
+                </span>
+                <select
+                  value={contactDraft.role ?? 'family_member'}
+                  onChange={(e) => {
+                    const role = e.target.value as EmergencyContactRole;
+                    setContactDraft((prev) => ({
+                      ...prev,
+                      role,
+                      isPrimary: role === 'primary_caregiver' ? true : prev.isPrimary,
+                    }));
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
+                >
+                  <option value="primary_caregiver">Primary Caregiver</option>
+                  <option value="secondary_caregiver">Secondary Caregiver</option>
+                  <option value="family_member">Family Member</option>
+                  <option value="emergency_support">Emergency Support Contact</option>
+                </select>
+              </label>
+
+              <label className="block space-y-1 text-xs">
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  Preferred Notification Channel
+                </span>
+                <select
+                  value={contactDraft.preferredChannel ?? 'whatsapp_then_sms'}
+                  onChange={(e) =>
+                    setContactDraft((prev) => ({
+                      ...prev,
+                      preferredChannel: e.target.value as EmergencyNotificationChannel,
+                    }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-sm"
+                >
+                  <option value="whatsapp_then_sms">WhatsApp First → SMS Fallback</option>
+                  <option value="whatsapp">WhatsApp Only</option>
+                  <option value="sms">SMS Only</option>
+                  <option value="sms_then_whatsapp">SMS First → WhatsApp Fallback</option>
+                  <option value="call_only">Manual Call Only (No Automated Alerts)</option>
+                </select>
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block space-y-1 text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Consent Status
+                  </span>
+                  <select
+                    value={contactDraft.consentStatus ?? 'pending'}
+                    onChange={(e) =>
+                      setContactDraft((prev) => ({
+                        ...prev,
+                        consentStatus: e.target.value as EmergencyConsentStatus,
+                      }))
+                    }
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs"
+                  >
+                    <option value="granted">Granted</option>
+                    <option value="pending">Pending</option>
+                    <option value="revoked">Revoked</option>
+                  </select>
+                </label>
+
+                <label className="block space-y-1 text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    Verification
+                  </span>
+                  <select
+                    value={contactDraft.verificationStatus ?? 'unverified'}
+                    onChange={(e) =>
+                      setContactDraft((prev) => ({
+                        ...prev,
+                        verificationStatus: e.target.value as EmergencyVerificationStatus,
+                      }))
+                    }
+                    className="w-full px-2.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-xs"
+                  >
+                    <option value="verified">Verified</option>
+                    <option value="pending">Pending</option>
+                    <option value="unverified">Unverified</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+              <label className="inline-flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(contactDraft.whatsappOptIn)}
+                  onChange={(e) =>
+                    setContactDraft((prev) => ({ ...prev, whatsappOptIn: e.target.checked }))
+                  }
+                  className="w-4 h-4 accent-teal-600"
+                />
+                <span>Confirmed WhatsApp-enabled & opted in (never assumed automatically)</span>
+              </label>
+
+              <label className="inline-flex items-center gap-2 font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={contactDraft.isActive !== false}
+                  onChange={(e) =>
+                    setContactDraft((prev) => ({ ...prev, isActive: e.target.checked }))
+                  }
+                  className="w-4 h-4 accent-teal-600"
+                />
+                <span>Contact Active</span>
               </label>
             </div>
 
@@ -1280,77 +1485,126 @@ export const CaregiverDashboardPage: React.FC<CaregiverDashboardPageProps> = ({
                 No emergency contact configured yet. Fill in the details above and click Save Emergency Contact.
               </p>
             ) : (
-              <div className="space-y-2 max-h-56 overflow-y-auto">
-                {contacts.map((contact) => (
-                  <div
-                    key={contact.id}
-                    className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-sm ${
-                      editingContactId === contact.id && !isAddingNewContact
-                        ? 'border-teal-500 bg-teal-50/40 dark:bg-teal-950/20'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-slate-900 dark:text-white">
-                          {contact.name}
-                        </span>
-                        {contact.relationship && (
-                          <span className="text-xs text-slate-500 dark:text-slate-400">
-                            · {contact.relationship}
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {contacts.map((contact) => {
+                  const sosReady =
+                    contact.isActive !== false &&
+                    contact.consentStatus === 'granted' &&
+                    contact.verificationStatus === 'verified' &&
+                    contact.preferredChannel !== 'call_only';
+                  return (
+                    <div
+                      key={contact.id}
+                      className={`p-3 rounded-xl border flex flex-wrap items-center justify-between gap-3 text-sm ${
+                        editingContactId === contact.id && !isAddingNewContact
+                          ? 'border-teal-500 bg-teal-50/40 dark:bg-teal-950/20'
+                          : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/60'
+                      }`}
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {contact.name}
                           </span>
-                        )}
-                        {contact.isPrimary && (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200">
-                            Primary
+                          {contact.relationship && (
+                            <span className="text-xs text-slate-500 dark:text-slate-400">
+                              · {contact.relationship}
+                            </span>
+                          )}
+                          {contact.isPrimary && (
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200">
+                              Primary
+                            </span>
+                          )}
+                          <span
+                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                              sosReady
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200'
+                            }`}
+                          >
+                            {sosReady ? 'SOS Ready' : 'Needs Consent/Verification'}
                           </span>
-                        )}
+                          {contact.whatsappOptIn && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
+                              WhatsApp Opt-In
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
+                          <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+                            <Phone className="w-3 h-3" />
+                            {contact.phone}
+                          </span>
+                          {contact.email && (
+                            <span className="inline-flex items-center gap-1">
+                              <Mail className="w-3 h-3" />
+                              {contact.email}
+                            </span>
+                          )}
+                          <span className="text-[11px] text-slate-500">
+                            {(contact.role || 'family_member').replace(/_/g, ' ')} ·{' '}
+                            {(contact.preferredChannel || 'whatsapp_then_sms').replace(/_/g, ' ')}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 dark:text-slate-300">
-                        <span className="inline-flex items-center gap-1 font-mono tabular-nums">
-                          <Phone className="w-3 h-3" />
-                          {contact.phone}
-                        </span>
-                        {contact.email && (
-                          <span className="inline-flex items-center gap-1">
-                            <Mail className="w-3 h-3" />
-                            {contact.email}
-                          </span>
-                        )}
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {!contact.isPrimary && (
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => handleMakePrimary(contact.id)}
-                          title="Set as Primary Contact"
-                          className="px-2 py-1 rounded border border-slate-300 dark:border-slate-700 text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-1 cursor-pointer"
+                          disabled={!sosReady || isTriggering}
+                          onClick={() => {
+                            void triggerSos({
+                              alertType: 'test',
+                              targetContactId: contact.id,
+                              simulateTest: sosSettings.testSimulationMode,
+                            }).then((res) => {
+                              if (res.alert) {
+                                showToast(
+                                  `Test alert (${res.alert.currentStatus}) sent for ${contact.name}.`
+                                );
+                              } else if (res.error) {
+                                showToast(res.error);
+                              }
+                            });
+                          }}
+                          title="Send clearly labelled test alert to this contact"
+                          className="px-2 py-1 rounded border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 text-xs font-medium inline-flex items-center gap-1 disabled:opacity-40 cursor-pointer"
                         >
-                          <Star className="w-3 h-3" />
-                          <span>Set Primary</span>
+                          <FlaskConical className="w-3 h-3" />
+                          <span>Test</span>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleEditExistingContact(contact.id)}
-                        aria-label={`Edit ${contact.name}`}
-                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteContact(contact.id)}
-                        aria-label={`Delete ${contact.name}`}
-                        className="p-1.5 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-950 cursor-pointer"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        {!contact.isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => handleMakePrimary(contact.id)}
+                            title="Set as Primary Contact"
+                            className="px-2 py-1 rounded border border-slate-300 dark:border-slate-700 text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <Star className="w-3 h-3" />
+                            <span>Primary</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleEditExistingContact(contact.id)}
+                          aria-label={`Edit ${contact.name}`}
+                          className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 cursor-pointer"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteContact(contact.id)}
+                          aria-label={`Delete ${contact.name}`}
+                          className="p-1.5 rounded text-red-600 hover:bg-red-50 dark:hover:bg-red-950 cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
